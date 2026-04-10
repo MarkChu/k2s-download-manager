@@ -100,11 +100,16 @@ app.MapGet("/api/version", () =>
 
 // ── Settings API ──────────────────────────────────────────────────────────────
 
+// Sentinel returned in GET so the real key is never sent to the browser.
+// PUT ignores the field when it receives this exact value.
+const string ApiKeyMask = "••••••••";
+
 app.MapGet("/api/settings", () =>
 {
     var s = AppSettings.Load();
+    var maskedKey = string.IsNullOrEmpty(s.GeminiApiKey) ? "" : ApiKeyMask;
     return Results.Ok(new SettingsDto(
-        s.GeminiApiKey, s.DownloadDirectory,
+        maskedKey, s.DownloadDirectory,
         s.Threads, s.SplitSizeMb, s.FfmpegCheck,
         s.MaxProxies, s.RevalidateProxies,
         s.DownloadMaxRetries, s.ProxyRefreshIntervalMin,
@@ -115,7 +120,9 @@ app.MapGet("/api/settings", () =>
 app.MapPut("/api/settings", (SettingsDto dto) =>
 {
     var s = AppSettings.Load();
-    s.GeminiApiKey                  = dto.GeminiApiKey ?? s.GeminiApiKey;
+    // Only update the key when the client explicitly changed it (not the masked placeholder)
+    if (dto.GeminiApiKey != null && dto.GeminiApiKey != ApiKeyMask)
+        s.GeminiApiKey = dto.GeminiApiKey;
     s.DownloadDirectory             = dto.DownloadDirectory ?? s.DownloadDirectory;
     s.Threads                       = dto.Threads ?? s.Threads;
     s.SplitSizeMb                   = dto.SplitSizeMb ?? s.SplitSizeMb;

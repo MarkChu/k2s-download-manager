@@ -845,7 +845,11 @@ function setProxyRefreshing(refreshing) {
 async function settingsLoad() {
   const res = await fetch('/api/settings');
   const s   = await res.json();
-  document.getElementById('s-geminiKey').value      = s.geminiApiKey       ?? '';
+  // Never put the masked sentinel into the input — use placeholder to indicate status.
+  // Empty value on save means "do not change the existing key".
+  const keyInput = document.getElementById('s-geminiKey');
+  keyInput.value       = '';
+  keyInput.placeholder = s.geminiApiKey ? '已設定（留空則不修改）' : '未設定';
   document.getElementById('s-autoAttempts').value   = s.autoSolveAttempts  ?? 3;
   document.getElementById('s-autoTimeout').value    = s.autoSolvePerAttemptTimeoutSec ?? 60;
   document.getElementById('s-downloadDir').value    = s.downloadDirectory  ?? '';
