@@ -133,6 +133,35 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          body: |
+            ## 下載說明
+
+            | 檔案 | 說明 |
+            |------|------|
+            | `K2sDownloaderWinForms-win-x64.zip` | Windows 桌面程式（免安裝，解壓縮即用） |
+            | `k2s-cli-win-x64.zip` | Windows CLI 工具 |
+            | `k2s-cli-linux-x64.zip` | Linux CLI 工具 |
+
+            Docker Image 已推送至 GHCR：
+            ```
+            ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
+            ```
+
+            ## 快速安裝（Docker）
+
+            ```bash
+            docker run -d \
+              --name k2s-downloader \
+              --restart unless-stopped \
+              -p 5000:5000 \
+              -v ~/k2s-data:/data \
+              ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
+            ```
+
+            開啟瀏覽器：`http://YOUR_IP:5000`
+
+            ## 更新紀錄
+
           files: |
             K2sDownloaderWinForms-win-x64.zip
             k2s-cli-win-x64.zip
