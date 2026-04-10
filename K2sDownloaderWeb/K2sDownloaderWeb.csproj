@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="../K2sDownloaderWinForms/settings.json" Link="settings.json">
+    <Content Include="../K2sDownloaderWinForms/settings.json.default" Link="settings.json.default">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
