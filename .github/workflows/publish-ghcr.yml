@@ -121,6 +121,8 @@ jobs:
     needs: [build-windows, build-linux-cli, build-docker]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: windows-artifacts
@@ -129,40 +131,54 @@ jobs:
         with:
           name: linux-artifacts
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          body: |
-            ## 下載說明
+      - name: Generate release notes file
+        run: |
+          cat > notes.md << 'NOTES'
+          ## 下載說明
 
-            | 檔案 | 說明 |
-            |------|------|
-            | `K2sDownloaderWinForms-win-x64.zip` | Windows 桌面程式（免安裝，解壓縮即用） |
-            | `k2s-cli-win-x64.zip` | Windows CLI 工具 |
-            | `k2s-cli-linux-x64.zip` | Linux CLI 工具 |
+          | 檔案 | 說明 |
+          |------|------|
+          | `K2sDownloaderWinForms-win-x64.zip` | Windows 桌面程式（免安裝，解壓縮後執行 `.exe`） |
+          | `k2s-cli-win-x64.zip` | Windows CLI 工具 |
+          | `k2s-cli-linux-x64.zip` | Linux CLI 工具 |
 
-            Docker Image 已推送至 GHCR：
-            ```
+          Docker Image 已推送至 GHCR：
+          ```
+          ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
+          ```
+
+          ## 快速安裝（Docker）
+
+          ```bash
+          docker run -d \
+            --name k2s-downloader \
+            --restart unless-stopped \
+            -p 5000:5000 \
+            -v ~/k2s-data:/data \
             ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
-            ```
+          ```
 
-            ## 快速安裝（Docker）
+          開啟瀏覽器：`http://YOUR_IP:5000`
 
-            ```bash
-            docker run -d \
-              --name k2s-downloader \
-              --restart unless-stopped \
-              -p 5000:5000 \
-              -v ~/k2s-data:/data \
-              ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
-            ```
+          ## 更新紀錄
 
-            開啟瀏覽器：`http://YOUR_IP:5000`
+          NOTES
 
-            ## 更新紀錄
+          # Append auto-generated commit log since last tag
+          gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="${{ github.ref_name }}" \
+            --jq '.body' >> notes.md || true
 
-          files: |
-            K2sDownloaderWinForms-win-x64.zip
-            k2s-cli-win-x64.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file notes.md \
+            K2sDownloaderWinForms-win-x64.zip \
+            k2s-cli-win-x64.zip \
             k2s-cli-linux-x64.zip
