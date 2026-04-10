@@ -56,4 +56,3 @@ nunit-*.xml
 # Ignore temporary files
 [tT][mM][pP]/
 settings.json
-!K2sDownloaderWinForms/settings.json
