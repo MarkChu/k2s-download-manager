@@ -14,5 +14,6 @@ fi
 mkdir -p "$DATA_DIR/downloads"
 
 # Run the web app with /data as working directory so queue.json / proxies.txt land there
+# Set content root to /app so ASP.NET Core can find wwwroot/static files
 cd "$DATA_DIR"
-exec /app/k2s-web
+exec /app/k2s-web --contentRoot /app
