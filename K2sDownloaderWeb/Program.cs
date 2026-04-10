@@ -135,7 +135,7 @@ app.MapPut("/api/settings", (SettingsDto dto) =>
 
 app.MapHub<DownloadHub>("/hub");
 
-app.Run("http://0.0.0.0:5000");
+app.Run();
 
 record AddUrlRequest(string Url, string? Filename);
 

@@ -1,0 +1,20 @@
+{
+  "GeminiApiKey": "",
+  "DownloadDirectory": "",
+  "Threads": 20,
+  "SplitSizeMb": 20,
+  "FfmpegCheck": true,
+  "MaxProxies": 1000,
+  "RevalidateProxies": false,
+  "DownloadMaxRetries": 3,
+  "ProxyRefreshIntervalMin": 5,
+  "AutoSolveAttempts": 3,
+  "AutoSolvePerAttemptTimeoutSec": 60,
+  "AutoSolveBaseDelayMs": 600,
+  "AutoSolveMaxDelayMs": 5000,
+  "ProxySourceUrls": [
+    "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=all&timeout=10000&country=all&ssl=all&anonymity=all&limit=2000",
+    "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/http/data.txt"
+  ],
+  "RecentUrls": []
+}

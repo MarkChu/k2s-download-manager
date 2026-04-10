@@ -17,6 +17,7 @@ RUN cp /src/K2sDownloaderWinForms/settings.json /app/settings.json.default
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 # runtime-deps is the minimal base for self-contained .NET apps (no SDK/runtime needed)
 FROM mcr.microsoft.com/dotnet/runtime-deps:8.0
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=build /app .
