@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.IO;
 using K2sDownloaderWeb.Models;
+using K2sDownloaderWinForms.Core;
 
 namespace K2sDownloaderWeb.Services;
 
@@ -43,12 +45,41 @@ public class QueueService
 
     public bool Remove(Guid id)
     {
+        string? outputFile = null;
+        bool removed = false;
         lock (_lock)
         {
-            var removed = _items.RemoveAll(i => i.Id == id && i.Status != QueueStatus.Downloading) > 0;
-            if (removed) Save();
-            return removed;
+            var item = _items.FirstOrDefault(i => i.Id == id);
+            if (item is null || item.Status == QueueStatus.Downloading)
+                return false;
+
+            outputFile = item.OutputFile;
+            _items.Remove(item);
+            removed = true;
+            Save();
+
+            // If any other item still references the same output file, skip deletion
+            if (!string.IsNullOrWhiteSpace(outputFile) && _items.Any(i => string.Equals(i.OutputFile, outputFile, StringComparison.OrdinalIgnoreCase)))
+            {
+                outputFile = null;
+            }
         }
+
+        if (removed && !string.IsNullOrWhiteSpace(outputFile))
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                var path = Path.Combine(s.EffectiveDownloadDirectory, outputFile!);
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch
+            {
+                // best-effort: ignore deletion failures
+            }
+        }
+
+        return removed;
     }
 
     public bool Retry(Guid id)

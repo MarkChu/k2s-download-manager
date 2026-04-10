@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.IO;
 using K2sDownloaderWeb.Hubs;
 using K2sDownloaderWeb.Models;
 using K2sDownloaderWeb.Services;
@@ -134,6 +135,18 @@ app.MapPut("/api/settings", (SettingsDto dto) =>
 // ── SignalR Hub ───────────────────────────────────────────────────────────────
 
 app.MapHub<DownloadHub>("/hub");
+
+// ── Download files ─────────────────────────────────────────────────────────
+app.MapGet("/download/{filename}", (string filename) =>
+{
+    var s = K2sDownloaderWinForms.Core.AppSettings.Load();
+    var dir = s.EffectiveDownloadDirectory;
+    var safe = Path.GetFileName(filename);
+    var path = Path.Combine(dir, safe);
+    if (!File.Exists(path)) return Results.NotFound();
+    var stream = File.OpenRead(path);
+    return Results.File(stream, "application/octet-stream", safe);
+});
 
 app.Run();
 

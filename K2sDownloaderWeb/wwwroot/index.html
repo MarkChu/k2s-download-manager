@@ -596,13 +596,28 @@ function renderQueue() {
     } else if (item.status === 'Done') {
       actions.push(`<button class="btn btn-xs btn-outline-secondary" onclick="removeItem('${item.id}')">移除</button>`);
     }
-    const info = item.status === 'Done'   ? (item.outputFile   || '') :
-                 item.status === 'Failed' ? (item.errorMessage || '') : '';
+
+    // Build info/title separately so we can inject an HTML link for completed files
+    let infoTitle = '';
+    let infoHtml  = '';
+    if (item.status === 'Done') {
+      infoTitle = esc(item.outputFile || '');
+      if (item.outputFile) {
+        infoHtml = `<a href="/download/${encodeURIComponent(item.outputFile)}" class="text-accent">${esc(item.outputFile)}</a>`;
+      }
+    } else if (item.status === 'Failed') {
+      infoTitle = esc(item.errorMessage || '');
+      infoHtml  = esc(item.errorMessage || '');
+    } else {
+      infoTitle = '';
+      infoHtml  = '';
+    }
+
     return `<tr>
       <td class="cell-url" title="${esc(item.url)}">${esc(item.url)}</td>
       <td style="font-size:.8rem">${esc(item.filename) || '<span class="text-muted">—</span>'}</td>
       <td><span class="badge-status badge-${item.status}">${item.status}</span></td>
-      <td class="cell-info" title="${esc(info)}">${esc(info)}</td>
+      <td class="cell-info" title="${infoTitle}">${infoHtml}</td>
       <td class="text-end">${actions.join('')}</td>
     </tr>`;
   }).join('');

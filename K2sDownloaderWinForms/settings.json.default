@@ -1,6 +1,6 @@
 {
   "GeminiApiKey": "",
-  "DownloadDirectory": "",
+  "DownloadDirectory": "data/downloads",
   "Threads": 20,
   "SplitSizeMb": 20,
   "FfmpegCheck": true,
