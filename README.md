@@ -105,6 +105,17 @@ docker compose restart
 - Captcha 自動解（Gemini API）/ 手動輸入
 - 即時 Log
 
+### 截圖
+
+**下載管理**
+![下載管理](docs/screenshots/screenshot-queue.png)
+
+**Proxy 管理**
+![Proxy 管理](docs/screenshots/screenshot-proxy.png)
+
+**系統設定**
+![系統設定](docs/screenshots/screenshot-settings.png)
+
 ---
 
 ## 從原始碼 Build
