@@ -11,7 +11,8 @@ permissions:
   id-token: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/k2s-download-manager
+  IMAGE_NAME: ghcr.io/markchu/k2s-download-manager
+  # Note: IMAGE_NAME is lowercased in build-docker via GITHUB_ENV before use
 
 jobs:
 
@@ -95,6 +96,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set lowercase image name
+        run: echo "IMAGE_LC=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/k2s-download-manager" >> $GITHUB_ENV
+
       - uses: docker/setup-qemu-action@v2
       - uses: docker/setup-buildx-action@v2
 
@@ -113,8 +117,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_LC }}:${{ github.ref_name }}
+            ${{ env.IMAGE_LC }}:latest
 
   # ── GitHub Release: attach all artifacts ─────────────────────────────────────
   create-release:
@@ -144,7 +148,7 @@ jobs:
 
           Docker Image 已推送至 GHCR：
           ```
-          ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
+          ghcr.io/markchu/k2s-download-manager:${{ github.ref_name }}
           ```
 
           ## 快速安裝（Docker）
@@ -155,7 +159,7 @@ jobs:
             --restart unless-stopped \
             -p 5000:5000 \
             -v ~/k2s-data:/data \
-            ghcr.io/${{ github.repository_owner }}/k2s-download-manager:${{ github.ref_name }}
+            ghcr.io/markchu/k2s-download-manager:${{ github.ref_name }}
           ```
 
           開啟瀏覽器：`http://YOUR_IP:5000`
