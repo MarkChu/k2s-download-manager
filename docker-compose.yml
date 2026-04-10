@@ -1,0 +1,15 @@
+services:
+  k2s-web:
+    image: ghcr.io/markchu/k2s-download-manager:latest
+    # build: .    # uncomment to build from source instead
+    container_name: k2s-downloader
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persistent data: queue, proxy cache, settings, and downloads
+      - ./data:/data
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      # Optional: override download directory inside container
+      # - DOWNLOAD_DIR=/data/downloads

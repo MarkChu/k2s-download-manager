@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"${workspaceFolder}/K2sDownloaderWinForms/K2sDownloaderWinForms.csproj"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "silent"
+			}
+		}
+	]
+}

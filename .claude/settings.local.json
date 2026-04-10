@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(taskkill /f /im K2sDownloaderWinForms.exe)",
+      "WebFetch(domain:keep2share.github.io)"
+    ]
+  }
+}

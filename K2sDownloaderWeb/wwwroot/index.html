@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K2S Downloader</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base:    #0f1117;
+      --bg-surface: #1a1d27;
+      --bg-raised:  #222637;
+      --bg-input:   #13151e;
+      --border:     #2e3348;
+      --text:       #d4d8f0;
+      --text-muted: #6b7194;
+      --accent:     #5b7fff;
+      --accent-dim: #3b57cc;
+      --success:    #22c55e;
+      --warning:    #f59e0b;
+      --danger:     #ef4444;
+      --orange:     #f97316;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ───────────────────────────────────────────────────────── */
+    .topbar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      height: 52px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-brand {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+    .topbar-actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+
+    /* ── Nav tabs ──────────────────────────────────────────────────────── */
+    .nav-tabs-custom {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.25rem;
+      display: flex;
+      gap: 0;
+    }
+    .nav-tabs-custom .nav-item { margin: 0; }
+    .nav-tabs-custom .nav-link {
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: .65rem 1.1rem;
+      font-size: .875rem;
+      font-weight: 500;
+      border-radius: 0;
+      transition: color .15s, border-color .15s;
+    }
+    .nav-tabs-custom .nav-link:hover  { color: var(--text); }
+    .nav-tabs-custom .nav-link.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: transparent;
+    }
+
+    /* ── Layout ────────────────────────────────────────────────────────── */
+    .tab-content { padding: 1.25rem; max-width: 1280px; margin: 0 auto; }
+
+    /* ── Cards ─────────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .panel-header {
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--border);
+      padding: .6rem 1rem;
+      font-size: .8rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+    .panel-body { padding: .9rem 1rem; }
+
+    /* ── Form controls ─────────────────────────────────────────────────── */
+    .form-control, .form-select {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: .875rem;
+    }
+    .form-control:focus, .form-select:focus {
+      background: var(--bg-input);
+      color: var(--text);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(91,127,255,.2);
+    }
+    .form-control::placeholder { color: var(--text-muted); }
+    .form-label { font-size: .8rem; color: var(--text-muted); margin-bottom: .3rem; }
+    .form-check-input {
+      background-color: var(--bg-input);
+      border-color: var(--border);
+    }
+    .form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+    .form-check-label { font-size: .875rem; }
+
+    /* ── Buttons ───────────────────────────────────────────────────────── */
+    .btn { border-radius: 6px; font-size: .875rem; font-weight: 500; }
+    .btn-primary   { background: var(--accent);    border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+    .btn-success   { background: var(--success);   border-color: var(--success); }
+    .btn-warning   { background: var(--warning);   border-color: var(--warning); color: #000; }
+    .btn-danger    { background: var(--danger);    border-color: var(--danger); }
+    .btn-outline-secondary {
+      color: var(--text-muted); border-color: var(--border); background: transparent;
+    }
+    .btn-outline-secondary:hover { background: var(--bg-raised); color: var(--text); border-color: var(--border); }
+    .btn-outline-primary  { color: var(--accent);  border-color: var(--accent); background: transparent; }
+    .btn-outline-primary:hover  { background: rgba(91,127,255,.12); color: var(--accent); border-color: var(--accent); }
+    .btn-outline-danger   { color: var(--danger);  border-color: var(--danger); background: transparent; }
+    .btn-outline-danger:hover   { background: rgba(239,68,68,.12); color: var(--danger); border-color: var(--danger); }
+    .btn-outline-warning  { color: var(--warning); border-color: var(--warning); background: transparent; }
+    .btn-outline-warning:hover  { background: rgba(245,158,11,.12); color: var(--warning); border-color: var(--warning); }
+    .btn-xs { padding: 2px 8px; font-size: .78rem; }
+
+    /* ── Status badges ─────────────────────────────────────────────────── */
+    .badge-status { padding: 3px 8px; border-radius: 20px; font-size: .73rem; font-weight: 600; }
+    .badge-Pending     { background: rgba(107,113,148,.25); color: #9aa0c0; }
+    .badge-Downloading { background: rgba(91,127,255,.2);   color: #7fa0ff; }
+    .badge-Done        { background: rgba(34,197,94,.18);   color: #4ade80; }
+    .badge-Failed      { background: rgba(239,68,68,.18);   color: #f87171; }
+    .badge-Cancelled   { background: rgba(249,115,22,.18);  color: #fb923c; }
+    .badge-idle   { background: rgba(107,113,148,.25); color: #9aa0c0; }
+    .badge-running{ background: rgba(34,197,94,.18);   color: #4ade80; }
+
+    /* ── Queue table ───────────────────────────────────────────────────── */
+    .queue-table { width: 100%; border-collapse: collapse; }
+    .queue-table th {
+      font-size: .73rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-muted);
+      padding: .5rem .75rem; border-bottom: 1px solid var(--border);
+    }
+    .queue-table td {
+      padding: .55rem .75rem; border-bottom: 1px solid rgba(46,51,72,.5);
+      font-size: .84rem; vertical-align: middle;
+    }
+    .queue-table tr:last-child td { border-bottom: none; }
+    .queue-table tr:hover td { background: rgba(255,255,255,.02); }
+    .cell-url  { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cell-info { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: .78rem; }
+
+    /* ── Progress bar ──────────────────────────────────────────────────── */
+    .progress-wrap { background: var(--bg-raised); border-radius: 6px; overflow: hidden; height: 20px; }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), #7c9fff);
+      transition: width .3s ease; display: flex; align-items: center;
+      justify-content: flex-end; padding-right: 6px;
+      font-size: .7rem; font-weight: 600; color: #fff;
+    }
+
+    /* ── Log panel ─────────────────────────────────────────────────────── */
+    #log-panel, #proxy-log {
+      height: 220px; overflow-y: auto;
+      font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: .78rem; line-height: 1.6;
+      background: var(--bg-input); padding: .6rem .75rem; border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    #log-panel .log-line, #proxy-log .log-line { border-bottom: 1px solid rgba(46,51,72,.4); padding: 1px 0; }
+
+    /* ── Proxy textarea ────────────────────────────────────────────────── */
+    #proxy-textarea {
+      font-family: 'Consolas', monospace; font-size: .8rem;
+      height: 280px; resize: vertical;
+    }
+
+    /* ── Settings groups ───────────────────────────────────────────────── */
+    .settings-group-label {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--accent); margin: 1.1rem 0 .6rem;
+      padding-bottom: .3rem; border-bottom: 1px solid var(--border);
+    }
+    .settings-group-label:first-child { margin-top: 0; }
+
+    /* ── Misc ──────────────────────────────────────────────────────────── */
+    .text-accent  { color: var(--accent); }
+    .text-success { color: var(--success) !important; }
+    .text-danger  { color: var(--danger)  !important; }
+    .text-muted   { color: var(--text-muted) !important; }
+    .divider { border-color: var(--border); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ─────────────────────────────────────────────────────────────── -->
+<div class="topbar">
+  <span class="topbar-brand">K2S Downloader</span>
+</div>
+
+<!-- ── Tabs ────────────────────────────────────────────────────────────────── -->
+<div class="nav-tabs-custom">
+  <ul class="nav" id="mainTabs" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-download" type="button">
+        下載管理
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-proxy" type="button" id="proxy-tab-btn">
+        Proxy 管理
+        <span id="proxy-count-badge" class="ms-1 badge-status badge-idle" style="font-size:.7rem">0</span>
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-settings" type="button" id="settings-tab-btn">
+        系統設定
+      </button>
+    </li>
+  </ul>
+</div>
+
+<!-- ── Tab content ─────────────────────────────────────────────────────────── -->
+<div class="tab-content">
+
+  <!-- ════ Tab 1: 下載管理 ════ -->
+  <div class="tab-pane fade show active" id="tab-download" role="tabpanel">
+
+    <!-- Queue controls -->
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <span id="proc-indicator" class="badge-status badge-idle">Idle</span>
+      <button class="btn btn-success btn-sm" onclick="startQueue()">&#9654; Start</button>
+      <button class="btn btn-warning btn-sm" onclick="stopQueue()">&#9646;&#9646; Stop</button>
+      <button class="btn btn-outline-danger btn-sm" onclick="cancelCurrent()">&#10005; Cancel Current</button>
+    </div>
+
+    <!-- Add URL -->
+    <div class="panel">
+      <div class="panel-header">新增下載</div>
+      <div class="panel-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label">K2S URL</label>
+            <input type="text" id="url-input" class="form-control form-control-sm"
+                   placeholder="https://k2s.cc/file/...">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">自訂檔名（選填）</label>
+            <input type="text" id="filename-input" class="form-control form-control-sm"
+                   placeholder="output.zip">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary btn-sm" onclick="addUrl()">新增</button>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary btn-sm"
+                    data-bs-toggle="collapse" data-bs-target="#batch-panel">批次貼上</button>
+          </div>
+        </div>
+        <div class="collapse mt-2" id="batch-panel">
+          <textarea id="batch-input" class="form-control form-control-sm" rows="4"
+                    placeholder="每行一個 URL..."></textarea>
+          <button class="btn btn-primary btn-sm mt-2" onclick="addBatch()">全部新增</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Progress -->
+    <div id="progress-card" class="panel d-none">
+      <div class="panel-header">
+        <span>下載中</span>
+        <small id="progress-url" class="text-muted ms-1" style="max-width:600px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block"></small>
+      </div>
+      <div class="panel-body">
+        <div class="progress-wrap mb-2">
+          <div id="progress-bar" class="progress-fill" style="width:0%">0%</div>
+        </div>
+        <div class="d-flex justify-content-between" style="font-size:.78rem;color:var(--text-muted)">
+          <span id="progress-bytes"></span>
+          <span id="progress-parts"></span>
+          <span id="progress-speed"></span>
+          <span id="progress-eta"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue -->
+    <div class="panel">
+      <div class="panel-header">
+        佇列
+        <span id="queue-count" class="text-muted" style="font-weight:400;text-transform:none;letter-spacing:0"></span>
+        <div class="ms-auto">
+          <button class="btn btn-outline-secondary btn-xs" onclick="clearCompleted()">清除已完成</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th>URL</th>
+              <th>檔名</th>
+              <th style="width:110px">狀態</th>
+              <th>資訊</th>
+              <th style="width:140px"></th>
+            </tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel">
+      <div class="panel-header">
+        Log
+        <div class="ms-auto">
+          <button class="btn btn-outline-secondary btn-xs" onclick="clearLog()">清除</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="log-panel"></div>
+      </div>
+    </div>
+
+  </div><!-- /tab-download -->
+
+  <!-- ════ Tab 2: Proxy 管理 ════ -->
+  <div class="tab-pane fade" id="tab-proxy" role="tabpanel">
+
+    <!-- Proxy Status & Controls -->
+    <div class="panel">
+      <div class="panel-header">
+        Proxy 狀態
+        <span id="proxy-refreshing-badge" class="badge-status d-none ms-1"
+              style="background:rgba(245,158,11,.18);color:#fbbf24;font-size:.7rem">刷新中...</span>
+        <div class="ms-auto d-flex gap-2">
+          <button class="btn btn-outline-primary btn-sm" onclick="proxyRefresh()" id="btn-proxy-refresh">
+            刷新 Proxy
+          </button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="d-flex align-items-center gap-3">
+          <div>
+            <div style="font-size:.75rem;color:var(--text-muted)">可用數量</div>
+            <div id="proxy-count-display" style="font-size:1.6rem;font-weight:700;color:var(--accent)">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proxy Source URLs -->
+    <div class="panel">
+      <div class="panel-header">
+        來源 URL
+        <span class="text-muted" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:.78rem">
+          刷新 Proxy 時從這些 URL 抓取清單
+        </span>
+        <div class="ms-auto">
+          <button class="btn btn-outline-secondary btn-xs"
+                  data-bs-toggle="collapse" data-bs-target="#proxy-sources-panel">展開 / 收合</button>
+        </div>
+      </div>
+      <div class="collapse show" id="proxy-sources-panel">
+        <div class="panel-body">
+          <div id="proxy-sources-list" class="mb-2" style="display:flex;flex-direction:column;gap:.4rem"></div>
+          <div class="d-flex gap-2 mt-1">
+            <button class="btn btn-outline-secondary btn-sm" onclick="proxySourceAdd()">+ 新增來源</button>
+            <button class="btn btn-primary btn-sm" onclick="proxySourceSave()">儲存</button>
+            <span id="proxy-sources-saved" class="text-success small align-self-center d-none">已儲存</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proxy Cache List -->
+    <div class="panel">
+      <div class="panel-header">
+        已驗證 Proxy 清單
+        <span class="text-muted" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:.78rem">
+          host:port，每行一個
+        </span>
+      </div>
+      <div class="panel-body">
+        <textarea id="proxy-textarea" class="form-control" placeholder="載入中..."></textarea>
+        <div class="d-flex gap-2 mt-2">
+          <button class="btn btn-primary btn-sm" onclick="proxySave()">儲存</button>
+          <button class="btn btn-outline-danger btn-sm" onclick="proxyClear()">全部清除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proxy Log -->
+    <div class="panel">
+      <div class="panel-header">
+        Log
+        <div class="ms-auto d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-xs" onclick="clearProxyLog()">清除</button>
+          <button class="btn btn-outline-secondary btn-xs"
+                  data-bs-toggle="collapse" data-bs-target="#proxy-log-panel">展開 / 收合</button>
+        </div>
+      </div>
+      <div class="collapse" id="proxy-log-panel">
+        <div class="panel-body">
+          <div id="proxy-log"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-proxy -->
+
+  <!-- ════ Tab 3: 系統設定 ════ -->
+  <div class="tab-pane fade" id="tab-settings" role="tabpanel">
+
+    <div class="panel">
+      <div class="panel-header">系統設定</div>
+      <div class="panel-body">
+
+        <!-- Gemini / Captcha -->
+        <div class="settings-group-label">Captcha / Gemini 自動解題</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Gemini API Key</label>
+            <input type="password" id="s-geminiKey" class="form-control form-control-sm"
+                   placeholder="留空則停用自動解題" autocomplete="new-password">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">自動嘗試次數</label>
+            <input type="number" id="s-autoAttempts" class="form-control form-control-sm" min="1">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">每次逾時 (秒)</label>
+            <input type="number" id="s-autoTimeout" class="form-control form-control-sm" min="5">
+          </div>
+        </div>
+
+        <!-- Download -->
+        <div class="settings-group-label">下載</div>
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label">下載目錄</label>
+            <input type="text" id="s-downloadDir" class="form-control form-control-sm"
+                   placeholder="/data/downloads">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">執行緒數</label>
+            <input type="number" id="s-threads" class="form-control form-control-sm" min="1" max="100">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">分段大小 (MB)</label>
+            <input type="number" id="s-splitMb" class="form-control form-control-sm" min="1">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">最大重試次數</label>
+            <input type="number" id="s-maxRetries" class="form-control form-control-sm" min="0">
+          </div>
+          <div class="col-md-1 d-flex align-items-end pb-1">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="s-ffmpegCheck">
+              <label class="form-check-label small" for="s-ffmpegCheck">FFmpeg</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Proxy -->
+        <div class="settings-group-label">Proxy</div>
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">自動刷新間隔 (分，0=停用)</label>
+            <input type="number" id="s-proxyRefresh" class="form-control form-control-sm" min="0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">最大數量</label>
+            <input type="number" id="s-maxProxies" class="form-control form-control-sm" min="1">
+          </div>
+          <div class="col-md-2 d-flex align-items-end pb-1">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="s-revalidate">
+              <label class="form-check-label small" for="s-revalidate">重新驗證</label>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider mt-4">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn btn-primary btn-sm" onclick="settingsSave()">儲存設定</button>
+          <span id="settings-saved" class="text-success small d-none">已儲存</span>
+          <span id="settings-error" class="text-danger small d-none"></span>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /tab-settings -->
+
+</div><!-- /tab-content -->
+
+<!-- ── Footer ────────────────────────────────────────────────────────────────── -->
+<div style="text-align:center;padding:.9rem;font-size:.75rem;color:var(--text-muted);border-top:1px solid var(--border);margin-top:.5rem">
+  K2S Downloader
+  <span id="footer-version"></span>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/MarkChu/k2s-download-manager" target="_blank"
+     style="color:var(--text-muted);text-decoration:none;"
+     onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">
+    GitHub
+  </a>
+</div>
+
+<!-- ── Captcha Modal ──────────────────────────────────────────────────────── -->
+<div class="modal fade" id="captchaModal" data-bs-backdrop="static" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content"
+         style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border)">
+      <div class="modal-header" style="border-color:var(--border)">
+        <h5 class="modal-title">需要輸入 Captcha</h5>
+      </div>
+      <div class="modal-body text-center">
+        <p class="small text-muted mb-2">Gemini 無法自動解題，請手動輸入。</p>
+        <img id="captcha-img" src="" alt="captcha"
+             class="img-fluid mb-3 rounded" style="max-height:160px;border:1px solid var(--border)">
+        <input type="text" id="captcha-answer" class="form-control"
+               placeholder="輸入 captcha 文字..." autocomplete="off">
+        <input type="hidden" id="captcha-id">
+      </div>
+      <div class="modal-footer" style="border-color:var(--border)">
+        <button class="btn btn-primary" onclick="submitCaptcha()">送出</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+<script>
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let queue = [], isProcessing = false, currentItemId = null;
+let connection = null, captchaModal = null;
+let lastBytes = 0, lastTick = 0, smoothedBps = 0;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function humanBytes(b) {
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
+  if (b >= 1048576)    return (b / 1048576).toFixed(1)    + ' MB';
+  if (b >= 1024)       return (b / 1024).toFixed(1)       + ' KB';
+  return b + ' B';
+}
+function humanSpeed(bps) {
+  if (bps >= 1048576) return (bps / 1048576).toFixed(1) + ' MB/s';
+  if (bps >= 1024)    return (bps / 1024).toFixed(1)    + ' KB/s';
+  return bps.toFixed(0) + ' B/s';
+}
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Render Queue ──────────────────────────────────────────────────────────────
+function renderQueue() {
+  document.getElementById('queue-count').textContent = `${queue.length} 項`;
+  document.getElementById('queue-body').innerHTML = queue.map(item => {
+    const actions = [];
+    if (item.status === 'Pending') {
+      actions.push(`<button class="btn btn-xs btn-outline-danger" onclick="removeItem('${item.id}')">移除</button>`);
+    } else if (item.status === 'Failed' || item.status === 'Cancelled') {
+      actions.push(`<button class="btn btn-xs btn-outline-warning me-1" onclick="retryItem('${item.id}')">重試</button>`);
+      actions.push(`<button class="btn btn-xs btn-outline-danger" onclick="removeItem('${item.id}')">移除</button>`);
+    } else if (item.status === 'Done') {
+      actions.push(`<button class="btn btn-xs btn-outline-secondary" onclick="removeItem('${item.id}')">移除</button>`);
+    }
+    const info = item.status === 'Done'   ? (item.outputFile   || '') :
+                 item.status === 'Failed' ? (item.errorMessage || '') : '';
+    return `<tr>
+      <td class="cell-url" title="${esc(item.url)}">${esc(item.url)}</td>
+      <td style="font-size:.8rem">${esc(item.filename) || '<span class="text-muted">—</span>'}</td>
+      <td><span class="badge-status badge-${item.status}">${item.status}</span></td>
+      <td class="cell-info" title="${esc(info)}">${esc(info)}</td>
+      <td class="text-end">${actions.join('')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateProgress(itemId, downloaded, total, done, totalParts) {
+  const card = document.getElementById('progress-card');
+  if (!currentItemId) { card.classList.add('d-none'); return; }
+  card.classList.remove('d-none');
+
+  const item = queue.find(i => i.id === itemId);
+  document.getElementById('progress-url').textContent = item ? item.url : '';
+
+  const now = Date.now(), dt = now - lastTick;
+  if (dt >= 300) {
+    const bps = (downloaded - lastBytes) * 1000 / Math.max(dt, 1);
+    smoothedBps = bps * 0.3 + smoothedBps * 0.7;
+    lastBytes = downloaded; lastTick = now;
+  }
+
+  const pct = total > 0 ? (downloaded * 100 / total) : 0;
+  const bar = document.getElementById('progress-bar');
+  bar.style.width = pct + '%';
+  bar.textContent = pct.toFixed(1) + '%';
+
+  document.getElementById('progress-bytes').textContent = `${humanBytes(downloaded)} / ${humanBytes(total)}`;
+  document.getElementById('progress-parts').textContent = `分段 ${done}/${totalParts}`;
+  document.getElementById('progress-speed').textContent = humanSpeed(smoothedBps);
+
+  const etaSec = smoothedBps > 100 && total > downloaded ? (total - downloaded) / smoothedBps : null;
+  document.getElementById('progress-eta').textContent = etaSec
+    ? `ETA ${String(Math.floor(etaSec / 60)).padStart(2,'0')}:${String(Math.floor(etaSec % 60)).padStart(2,'0')}`
+    : 'ETA --:--';
+}
+
+function updateProcessingState() {
+  const el = document.getElementById('proc-indicator');
+  el.textContent = isProcessing ? 'Running' : 'Idle';
+  el.className   = `badge-status ${isProcessing ? 'badge-running' : 'badge-idle'}`;
+}
+
+function appendLog(msg) {
+  const panel = document.getElementById('log-panel');
+  const line  = document.createElement('div');
+  line.className   = 'log-line';
+  line.textContent = msg;
+  panel.appendChild(line);
+  if (panel.children.length > 500) panel.removeChild(panel.firstChild);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function appendProxyLog(msg) {
+  // Auto-expand the log panel on first message
+  const collapse = document.getElementById('proxy-log-panel');
+  if (!collapse.classList.contains('show'))
+    bootstrap.Collapse.getOrCreateInstance(collapse).show();
+
+  const panel = document.getElementById('proxy-log');
+  const line  = document.createElement('div');
+  line.className   = 'log-line';
+  line.textContent = msg;
+  panel.appendChild(line);
+  if (panel.children.length > 500) panel.removeChild(panel.firstChild);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function clearProxyLog() { document.getElementById('proxy-log').innerHTML = ''; }
+
+// ── Queue API ─────────────────────────────────────────────────────────────────
+async function loadQueue() {
+  const res = await fetch('/api/queue');
+  queue = await res.json();
+  renderQueue();
+}
+
+async function addUrl() {
+  const url = document.getElementById('url-input').value.trim();
+  const filename = document.getElementById('filename-input').value.trim();
+  if (!url) return;
+  const res = await fetch('/api/queue', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, filename: filename || null })
+  });
+  if (!res.ok) { alert(await res.text()); return; }
+  queue.push(await res.json());
+  renderQueue();
+  document.getElementById('url-input').value = '';
+  document.getElementById('filename-input').value = '';
+}
+
+async function addBatch() {
+  const lines = document.getElementById('batch-input').value
+    .split('\n').map(l => l.trim()).filter(l => l.startsWith('http'));
+  for (const url of lines) {
+    const res = await fetch('/api/queue', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, filename: null })
+    });
+    if (res.ok) queue.push(await res.json());
+  }
+  renderQueue();
+  document.getElementById('batch-input').value = '';
+  bootstrap.Collapse.getInstance(document.getElementById('batch-panel'))?.hide();
+}
+
+async function removeItem(id) {
+  await fetch(`/api/queue/${id}`, { method: 'DELETE' });
+  queue = queue.filter(i => i.id !== id);
+  renderQueue();
+}
+
+async function retryItem(id) {
+  const res = await fetch(`/api/queue/${id}/retry`, { method: 'POST' });
+  if (!res.ok) return;
+  const item = queue.find(i => i.id === id);
+  if (item) { item.status = 'Pending'; item.errorMessage = null; item.outputFile = null; }
+  renderQueue();
+}
+
+async function clearCompleted() {
+  const done = queue.filter(i => i.status === 'Done').map(i => i.id);
+  await Promise.all(done.map(id => fetch(`/api/queue/${id}`, { method: 'DELETE' })));
+  queue = queue.filter(i => i.status !== 'Done');
+  renderQueue();
+}
+
+async function startQueue()    { await fetch('/api/start', { method: 'POST' }); isProcessing = true;  updateProcessingState(); }
+async function stopQueue()     { await fetch('/api/stop',  { method: 'POST' }); isProcessing = false; updateProcessingState(); }
+async function cancelCurrent() { await fetch('/api/cancel-current', { method: 'POST' }); }
+function clearLog() { document.getElementById('log-panel').innerHTML = ''; }
+
+// ── Proxy ─────────────────────────────────────────────────────────────────────
+async function proxyRefresh() {
+  await fetch('/api/proxies/refresh', { method: 'POST' });
+}
+
+// ── Proxy source URLs ─────────────────────────────────────────────────────────
+async function proxySourceLoad() {
+  const res  = await fetch('/api/proxies/sources');
+  const urls = await res.json();
+  renderProxySources(urls);
+}
+
+function renderProxySources(urls) {
+  const list = document.getElementById('proxy-sources-list');
+  list.innerHTML = urls.map((url, i) => `
+    <div class="d-flex gap-2 align-items-center" data-idx="${i}">
+      <input type="text" class="form-control form-control-sm proxy-source-input"
+             value="${esc(url)}" style="flex:1">
+      <button class="btn btn-outline-danger btn-xs" onclick="proxySourceRemove(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function proxySourceAdd() {
+  const inputs = [...document.querySelectorAll('.proxy-source-input')].map(i => i.value.trim());
+  inputs.push('');
+  renderProxySources(inputs);
+  // focus new input
+  const all = document.querySelectorAll('.proxy-source-input');
+  all[all.length - 1]?.focus();
+}
+
+function proxySourceRemove(idx) {
+  const inputs = [...document.querySelectorAll('.proxy-source-input')].map(i => i.value.trim());
+  inputs.splice(idx, 1);
+  renderProxySources(inputs);
+}
+
+async function proxySourceSave() {
+  const urls = [...document.querySelectorAll('.proxy-source-input')]
+    .map(i => i.value.trim()).filter(Boolean);
+  const res = await fetch('/api/proxies/sources', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(urls),
+  });
+  if (res.ok) {
+    const el = document.getElementById('proxy-sources-saved');
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 2000);
+    appendProxyLog(`[Sources] 已儲存 ${urls.length} 個來源 URL。`);
+  }
+}
+
+async function proxyLoad() {
+  const res  = await fetch('/api/proxies');
+  const list = await res.json();
+  document.getElementById('proxy-textarea').value = list.join('\n');
+}
+
+async function proxySave() {
+  const text = document.getElementById('proxy-textarea').value;
+  const res  = await fetch('/api/proxies', {
+    method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: text
+  });
+  if (res.ok) {
+    const { count } = await res.json();
+    updateProxyCount(count);
+    appendLog(`[Proxy] 已儲存 ${count} 個 proxy。`);
+  }
+}
+
+async function proxyClear() {
+  if (!confirm('確定清除所有 proxy？')) return;
+  await fetch('/api/proxies', { method: 'DELETE' });
+  document.getElementById('proxy-textarea').value = '';
+  updateProxyCount(0);
+  appendLog('[Proxy] 已清除。');
+}
+
+function updateProxyCount(count) {
+  document.getElementById('proxy-count-badge').textContent   = count;
+  document.getElementById('proxy-count-display').textContent = count;
+  const cls = count > 0 ? 'badge-running' : 'badge-idle';
+  document.getElementById('proxy-count-badge').className = `ms-1 badge-status ${cls}`;
+}
+
+function setProxyRefreshing(refreshing) {
+  document.getElementById('proxy-refreshing-badge').classList.toggle('d-none', !refreshing);
+  document.getElementById('btn-proxy-refresh').disabled = refreshing;
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function settingsLoad() {
+  const res = await fetch('/api/settings');
+  const s   = await res.json();
+  document.getElementById('s-geminiKey').value      = s.geminiApiKey       ?? '';
+  document.getElementById('s-autoAttempts').value   = s.autoSolveAttempts  ?? 3;
+  document.getElementById('s-autoTimeout').value    = s.autoSolvePerAttemptTimeoutSec ?? 60;
+  document.getElementById('s-downloadDir').value    = s.downloadDirectory  ?? '';
+  document.getElementById('s-threads').value        = s.threads            ?? 20;
+  document.getElementById('s-splitMb').value        = s.splitSizeMb        ?? 20;
+  document.getElementById('s-maxRetries').value     = s.downloadMaxRetries ?? 3;
+  document.getElementById('s-ffmpegCheck').checked  = s.ffmpegCheck        ?? true;
+  document.getElementById('s-proxyRefresh').value   = s.proxyRefreshIntervalMin ?? 5;
+  document.getElementById('s-maxProxies').value     = s.maxProxies         ?? 1000;
+  document.getElementById('s-revalidate').checked   = s.revalidateProxies  ?? false;
+}
+
+async function settingsSave() {
+  const body = {
+    geminiApiKey:                  document.getElementById('s-geminiKey').value || null,
+    autoSolveAttempts:             parseInt(document.getElementById('s-autoAttempts').value),
+    autoSolvePerAttemptTimeoutSec: parseInt(document.getElementById('s-autoTimeout').value),
+    autoSolveBaseDelayMs:          null,
+    autoSolveMaxDelayMs:           null,
+    downloadDirectory:             document.getElementById('s-downloadDir').value.trim() || null,
+    threads:                       parseInt(document.getElementById('s-threads').value),
+    splitSizeMb:                   parseInt(document.getElementById('s-splitMb').value),
+    downloadMaxRetries:            parseInt(document.getElementById('s-maxRetries').value),
+    ffmpegCheck:                   document.getElementById('s-ffmpegCheck').checked,
+    proxyRefreshIntervalMin:       parseInt(document.getElementById('s-proxyRefresh').value),
+    maxProxies:                    parseInt(document.getElementById('s-maxProxies').value),
+    revalidateProxies:             document.getElementById('s-revalidate').checked,
+  };
+  const savedEl = document.getElementById('settings-saved');
+  const errorEl = document.getElementById('settings-error');
+  savedEl.classList.add('d-none');
+  errorEl.classList.add('d-none');
+
+  const res = await fetch('/api/settings', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) {
+    savedEl.classList.remove('d-none');
+    setTimeout(() => savedEl.classList.add('d-none'), 2000);
+    appendLog('[Settings] 設定已儲存。');
+  } else {
+    errorEl.textContent = '儲存失敗：' + await res.text();
+    errorEl.classList.remove('d-none');
+  }
+}
+
+// ── Captcha ───────────────────────────────────────────────────────────────────
+function submitCaptcha() {
+  const id     = document.getElementById('captcha-id').value;
+  const answer = document.getElementById('captcha-answer').value.trim();
+  if (!answer) return;
+  connection.invoke('SubmitCaptcha', id, answer);
+  captchaModal.hide();
+}
+
+// ── SignalR ───────────────────────────────────────────────────────────────────
+async function initSignalR() {
+  connection = new signalR.HubConnectionBuilder()
+    .withUrl('/hub')
+    .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.Warning)
+    .build();
+
+  connection.on('Log',      (_id, msg) => appendLog(msg));
+  connection.on('ProxyLog', msg        => appendProxyLog(msg));
+
+  connection.on('ProxyStateChanged', (refreshing, count) => {
+    setProxyRefreshing(refreshing);
+    updateProxyCount(count);
+    if (!refreshing && document.getElementById('tab-proxy').classList.contains('active')) {
+      fetch('/api/proxies').then(r => r.json()).then(list => {
+        document.getElementById('proxy-textarea').value = list.join('\n');
+      });
+    }
+  });
+
+  connection.on('Progress', (itemId, downloaded, total, done, totalParts) =>
+    updateProgress(itemId, downloaded, total, done, totalParts));
+
+  connection.on('ItemStatusChanged', (itemId, status, outputFile, errorMessage) => {
+    const item = queue.find(i => i.id === itemId);
+    if (item) {
+      item.status = status;
+      if (outputFile)   item.outputFile   = outputFile;
+      if (errorMessage) item.errorMessage = errorMessage;
+    }
+    if (status !== 'Downloading') {
+      currentItemId = null;
+      document.getElementById('progress-card').classList.add('d-none');
+      lastBytes = 0; lastTick = 0; smoothedBps = 0;
+    } else {
+      currentItemId = itemId;
+    }
+    renderQueue();
+  });
+
+  connection.on('ProcessingStateChanged', processing => {
+    isProcessing = processing;
+    updateProcessingState();
+  });
+
+  connection.on('CaptchaRequired', (_itemId, captchaId, imageBase64) => {
+    document.getElementById('captcha-img').src    = 'data:image/png;base64,' + imageBase64;
+    document.getElementById('captcha-id').value   = captchaId;
+    document.getElementById('captcha-answer').value = '';
+    appendLog('[Captcha] 需要手動輸入 — 請查看彈窗。');
+    captchaModal.show();
+  });
+
+  connection.onreconnected(() => appendLog('[SignalR] 已重新連線。'));
+  connection.onclose(()      => appendLog('[SignalR] 連線已關閉。'));
+
+  await connection.start();
+  appendLog('[SignalR] 已連線。');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  captchaModal = new bootstrap.Modal(document.getElementById('captchaModal'));
+
+  document.getElementById('url-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addUrl();
+  });
+  document.getElementById('captcha-answer').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitCaptcha();
+  });
+
+  // Load proxy list and sources when proxy tab is shown
+  document.getElementById('proxy-tab-btn').addEventListener('shown.bs.tab', () => {
+    proxyLoad();
+    proxySourceLoad();
+  });
+
+  // Load settings when settings tab is shown
+  document.getElementById('settings-tab-btn').addEventListener('shown.bs.tab', settingsLoad);
+
+  fetch('/api/version').then(r => r.json()).then(({ version }) => {
+    document.getElementById('footer-version').textContent = `v${version}`;
+  });
+
+  await loadQueue();
+
+  const st = await (await fetch('/api/status')).json();
+  isProcessing  = st.isProcessing;
+  currentItemId = st.currentItemId;
+  updateProcessingState();
+
+  const pst = await (await fetch('/api/proxies/status')).json();
+  updateProxyCount(pst.count);
+  setProxyRefreshing(pst.isRefreshing);
+
+  await initSignalR();
+});
+</script>
+</body>
+</html>

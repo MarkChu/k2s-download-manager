@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>K2sDownloaderCLI</RootNamespace>
+    <AssemblyName>k2s-cli</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Link Core files from the WinForms project so both share the same source. -->
+  <ItemGroup>
+    <Compile Include="../K2sDownloaderWinForms/Core/AppSettings.cs"       Link="Core/AppSettings.cs" />
+    <Compile Include="../K2sDownloaderWinForms/Core/Downloader.cs"        Link="Core/Downloader.cs" />
+    <Compile Include="../K2sDownloaderWinForms/Core/GeminiClient.cs"      Link="Core/GeminiClient.cs" />
+    <Compile Include="../K2sDownloaderWinForms/Core/K2sClient.cs"         Link="Core/K2sClient.cs" />
+    <Compile Include="../K2sDownloaderWinForms/Core/ProxyManager.cs"      Link="Core/ProxyManager.cs" />
+    <Compile Include="../K2sDownloaderWinForms/Core/ProxyRefreshService.cs" Link="Core/ProxyRefreshService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../K2sDownloaderWinForms/settings.json" Link="settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
