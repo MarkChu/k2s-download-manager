@@ -2,6 +2,8 @@
 
 K2S 下載工具，提供 Web UI 介面，支援佇列管理、Proxy 自動輪換、Gemini 自動解 Captcha。
 
+> **致謝**：本專案的核心下載邏輯與 K2S API 互動方式參照自 [lu8787ouo/k2s-Downloaderm](https://github.com/lu8787ouo/k2s-Downloaderm) 的 Python 版本，並以 C# 重新實作，加入 Web UI、Docker 支援與 Windows Forms 介面。
+
 ## 快速安裝（Docker）
 
 ### 方法一：docker run（最簡單，不需 Compose）
