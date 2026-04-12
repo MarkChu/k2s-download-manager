@@ -17,12 +17,24 @@ RUN cp /src/K2sDownloaderWinForms/settings.json.default /app/settings.json.defau
 # ── Stage 2: Download Playwright Chromium browser ─────────────────────────────
 # Uses the same Ubuntu 22.04 base as the runtime stage to ensure binary compatibility.
 FROM ubuntu:22.04 AS browser
+
+# 1. 先安裝 curl 和憑證 (為了稍後能安全下載 Node.js 安裝腳本)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nodejs npm ca-certificates \
+    curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# 2. 加入 Node.js 20 的官方儲存庫，並安裝 nodejs (新版 nodejs 會自動包含 npm)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # PLAYWRIGHT_BROWSERS_PATH controls where the browser is stored.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# 先安裝 Chromium 執行檔
 RUN npx --yes playwright@1.51.0 install chromium
+
+# 再讓 Playwright 自動補齊系統缺少的依賴套件
+RUN npx --yes playwright@1.51.0 install-deps chromium
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 # runtime-deps:8.0-jammy = Ubuntu 22.04 — matches the browser download stage.
