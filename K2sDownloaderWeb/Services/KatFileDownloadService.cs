@@ -350,15 +350,22 @@ public class KatFileDownloadService
             }
         };
 
-        log("[KatFile] Submitting download form...");
-        // Explicitly target the free download button; exclude method_premium which is hidden
+        // The free-download submit button (#freebtn / method_free) is hidden on page load
+        // and revealed by JS after the countdown ends. Wait up to 65 s for it to appear.
+        log("[KatFile] Waiting for download button to become visible...");
         var submitBtn = page.Locator(
+            "#freebtn, " +
             "input[name='method_free'][type='submit'], " +
-            "#btn_download, " +
-            "input[type='submit']:not([name='method_premium'])"
+            "#btn_download"
         ).Last;
 
-        await submitBtn.ClickAsync(new LocatorClickOptions { Timeout = 8_000 });
+        await submitBtn.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 65_000
+        });
+        log("[KatFile] Download button visible, submitting...");
+        await submitBtn.ClickAsync(new LocatorClickOptions { Timeout = 5_000 });
 
         // Wait up to 20 s for URL
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
