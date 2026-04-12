@@ -10,8 +10,9 @@ public class KatFileDownloadService
 {
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
+    // KatFile domains: .com (legacy), .vip, .cloud (2025-09), .online (2025-12 current main)
     private static readonly Regex _urlPattern =
-        new(@"https?://(?:www\.)?katfile\.(com|vip)/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"https?://(?:www\.)?katfile\.(com|vip|cloud|online)/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static bool IsKatFileUrl(string url) => _urlPattern.IsMatch(url);
 
@@ -71,6 +72,17 @@ public class KatFileDownloadService
                 WaitUntil = WaitUntilState.DOMContentLoaded,
                 Timeout = 30_000
             });
+
+            // Detect premium-only or registration-required redirects
+            var currentUrl = page.Url;
+            if (currentUrl.Contains("op=registration", StringComparison.OrdinalIgnoreCase))
+                throw new PermanentException(
+                    "KatFile requires an account to download this file. " +
+                    "The page redirected to a registration page.");
+            var pageContent = await page.ContentAsync();
+            if (pageContent.Contains("This file is available for Premium", StringComparison.OrdinalIgnoreCase))
+                throw new PermanentException(
+                    "This KatFile is premium-only and cannot be downloaded with a free account.");
 
             var fileName = await ExtractFileNameAsync(page);
             log($"[KatFile] File: {fileName}");
@@ -163,6 +175,24 @@ public class KatFileDownloadService
 
     private static async Task WaitForCountdownAsync(IPage page, Action<string> log, CancellationToken ct)
     {
+        // JDownloader finding: KatFile stores wait time in JS as tenths-of-seconds
+        // e.g. var estimated_time = 300  →  30 seconds
+        try
+        {
+            var estimatedRaw = await page.EvaluateAsync<int?>(
+                "() => { var m = document.documentElement.innerHTML.match(/var estimated_time\\s*=\\s*(\\d+)/); " +
+                "return m ? parseInt(m[1]) : null; }");
+            if (estimatedRaw is > 0)
+            {
+                var secs = estimatedRaw.Value / 10;
+                log($"[KatFile] Waiting {secs}s (estimated_time={estimatedRaw})...");
+                await Task.Delay(secs * 1000 + 1_500, ct); // +1.5s buffer
+                return;
+            }
+        }
+        catch { /* fallback to visual timer */ }
+
+        // Fallback: watch the visible countdown element
         var timer = page.Locator("#countdown, #ctimer, .countdown-timer, [id*='timer']").First;
         try
         {

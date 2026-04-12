@@ -30,7 +30,7 @@ import io
 # ── 1. URL pattern test (mirrors KatFileDownloadService._urlPattern) ───────────
 
 URL_PATTERN = re.compile(
-    r'https?://(?:www\.)?katfile\.(com|vip)/\w',
+    r'https?://(?:www\.)?katfile\.(com|vip|cloud|online)/\w',
     re.IGNORECASE
 )
 
@@ -44,6 +44,8 @@ def test_url_pattern():
         ("http://katfile.com/abc/test.mp4",                True),
         ("https://katfile.vip/9b6eythdkdll/g8843.part1.rar.html", True),
         ("https://www.katfile.vip/abc/file.zip",           True),
+        ("https://katfile.cloud/abc123/file.rar",          True),
+        ("https://katfile.online/abc123/file.zip",         True),
         ("https://k2s.cc/file/abc",                        False),
         ("https://keep2share.cc/file/abc",                 False),
         ("https://katfile.com/",                           False),
