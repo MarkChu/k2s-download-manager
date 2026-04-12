@@ -77,6 +77,10 @@ public class KatFileDownloadService
             await DebugScreenshotAsync(page, "01-landed");
             await DebugDumpFormsAsync(page, log);
 
+            // ── Step 0: Dismiss register/login popup if present ───────────────
+            await DismissPopupAsync(page, log);
+            await DebugScreenshotAsync(page, "02-after-dismiss");
+
             // ── Step 1: Submit download1 form ("Free Download") ───────────────
             var freeBtn = page.Locator("input[name='method_free']").First;
             bool hasStep1;
@@ -97,13 +101,13 @@ public class KatFileDownloadService
                 await freeBtn.ClickAsync();
                 await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded,
                     new PageWaitForLoadStateOptions { Timeout = 20_000 });
-                await DebugScreenshotAsync(page, "02-after-step1");
+                await DebugScreenshotAsync(page, "03-after-step1");
                 await DebugDumpFormsAsync(page, log);
             }
 
             // ── Step 2: Wait for countdown timer ──────────────────────────────
             await WaitForCountdownAsync(page, log, ct);
-            await DebugScreenshotAsync(page, "03-after-countdown");
+            await DebugScreenshotAsync(page, "04-after-countdown");
 
             // ── Step 3: Solve reCaptcha (optional — not all pages require it) ──
             bool hasCaptcha;
@@ -129,12 +133,12 @@ public class KatFileDownloadService
                     "  if (el) { el.value = t; el.dispatchEvent(new Event('change')); } " +
                     "}",
                     token);
-                await DebugScreenshotAsync(page, "04-after-captcha");
+                await DebugScreenshotAsync(page, "05-after-captcha");
             }
             else
             {
                 log("[KatFile] No captcha detected, proceeding directly...");
-                await DebugScreenshotAsync(page, "04-no-captcha");
+                await DebugScreenshotAsync(page, "05-no-captcha");
                 await DebugDumpFormsAsync(page, log);
             }
 
@@ -402,6 +406,56 @@ public class KatFileDownloadService
                 "() => document.querySelector('[name=\"g-recaptcha-response\"]')?.value ?? ''");
         }
         catch { return null; }
+    }
+
+    // ── Popup dismiss ─────────────────────────────────────────────────────────
+
+    private static async Task DismissPopupAsync(IPage page, Action<string> log)
+    {
+        // Common selectors for register/login modal close buttons on XFileSharingPro
+        var closeSelectors = new[]
+        {
+            // Bootstrap modal close button
+            ".modal .close, .modal [data-dismiss='modal'], .modal button.btn-close",
+            // Explicit cancel/close text
+            "button:has-text('Cancel'), button:has-text('Close'), button:has-text('No thanks')",
+            "a:has-text('Cancel'), a:has-text('Close'), a:has-text('No thanks')",
+            // Generic overlay close
+            "#modal-register .close, #loginModal .close, #registerModal .close",
+        };
+
+        foreach (var selector in closeSelectors)
+        {
+            try
+            {
+                var btn = page.Locator(selector).First;
+                await btn.WaitForAsync(new LocatorWaitForOptions
+                {
+                    State = WaitForSelectorState.Visible,
+                    Timeout = 2_000
+                });
+                log($"[KatFile] Dismissing popup ({selector})...");
+                await btn.ClickAsync();
+                await Task.Delay(500);
+                return;
+            }
+            catch { /* not found, try next */ }
+        }
+
+        // Fallback: press Escape to dismiss any open modal
+        try
+        {
+            var modal = page.Locator(".modal.show, .modal[style*='display: block']").First;
+            await modal.WaitForAsync(new LocatorWaitForOptions
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 1_500
+            });
+            log("[KatFile] Popup detected, pressing Escape...");
+            await page.Keyboard.PressAsync("Escape");
+            await Task.Delay(500);
+        }
+        catch { /* no modal visible */ }
     }
 
     // ── Debug helpers ─────────────────────────────────────────────────────────
