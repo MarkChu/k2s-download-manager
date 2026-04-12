@@ -10,9 +10,9 @@ public class KatFileDownloadService
 {
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
-    // KatFile domains: .com (legacy), .vip, .cloud (2025-09), .online (2025-12 current main)
+    // KatFile domains (all known): .com .vip .ws .cloud .online
     private static readonly Regex _urlPattern =
-        new(@"https?://(?:www\.)?katfile\.(com|vip|cloud|online)/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"https?://(?:www\.)?katfile\.(com|vip|ws|cloud|online)/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static bool IsKatFileUrl(string url) => _urlPattern.IsMatch(url);
 
@@ -350,22 +350,25 @@ public class KatFileDownloadService
             }
         };
 
-        // The free-download submit button (#freebtn / method_free) is hidden on page load
-        // and revealed by JS after the countdown ends. Wait up to 65 s for it to appear.
-        log("[KatFile] Waiting for download button to become visible...");
-        var submitBtn = page.Locator(
-            "#freebtn, " +
-            "input[name='method_free'][type='submit'], " +
-            "#btn_download"
-        ).Last;
-
-        await submitBtn.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = 65_000
-        });
-        log("[KatFile] Download button visible, submitting...");
-        await submitBtn.ClickAsync(new LocatorClickOptions { Timeout = 5_000 });
+        // The free-download button (#freebtn) is kept hidden by the site's JS countdown.
+        // In headless mode the countdown may not fire, so we submit the form directly via JS
+        // (mirrors JDownloader's pure-HTTP form submission approach).
+        log("[KatFile] Submitting download form via JS...");
+        var submitted = await page.EvaluateAsync<bool>(@"() => {
+            // Find form containing the free download button
+            const btn = document.querySelector('#freebtn, input[name=""method_free""][type=""submit""]');
+            const form = btn ? btn.closest('form') : document.querySelector('form[method=""post""]');
+            if (!form) return false;
+            // Make sure method_free is set; remove method_premium to avoid premium path
+            const mp = form.querySelector('input[name=""method_premium""]');
+            if (mp) mp.remove();
+            const mf = form.querySelector('input[name=""method_free""]');
+            if (mf) { mf.disabled = false; mf.style.display = ''; }
+            form.submit();
+            return true;
+        }");
+        if (!submitted)
+            throw new Exception("Could not find download form to submit.");
 
         // Wait up to 20 s for URL
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
