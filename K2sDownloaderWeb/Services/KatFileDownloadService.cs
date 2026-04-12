@@ -111,23 +111,47 @@ public class KatFileDownloadService
             // ── Step 2: Wait for countdown timer ──────────────────────────────
             await WaitForCountdownAsync(page, log, ct);
 
-            // ── Step 3: Solve reCaptcha ───────────────────────────────────────
-            log("[KatFile] Solving reCaptcha...");
-            var token = await SolveReCaptchaAsync(page, witAiApiKey, log, ct);
+            // ── Step 3: Solve reCaptcha (optional — not all pages require it) ──
+            bool hasCaptcha;
+            try
+            {
+                await page.WaitForSelectorAsync(
+                    "iframe[src*='recaptcha'], iframe[title*='recaptcha'], iframe[src*='hcaptcha']",
+                    new PageWaitForSelectorOptions { Timeout = 6_000 });
+                hasCaptcha = true;
+            }
+            catch { hasCaptcha = false; }
 
-            // Inject token into the hidden textarea
-            await page.EvaluateAsync(
-                "(t) => { " +
-                "  var el = document.querySelector('textarea[name=\"g-recaptcha-response\"]') " +
-                "         || document.querySelector('[name=\"g-recaptcha-response\"]'); " +
-                "  if (el) { el.value = t; el.dispatchEvent(new Event('change')); } " +
-                "}",
-                token);
+            if (hasCaptcha)
+            {
+                log("[KatFile] Solving reCaptcha...");
+                var token = await SolveReCaptchaAsync(page, witAiApiKey, log, ct);
+
+                // Inject token into the hidden textarea
+                await page.EvaluateAsync(
+                    "(t) => { " +
+                    "  var el = document.querySelector('textarea[name=\"g-recaptcha-response\"]') " +
+                    "         || document.querySelector('[name=\"g-recaptcha-response\"]'); " +
+                    "  if (el) { el.value = t; el.dispatchEvent(new Event('change')); } " +
+                    "}",
+                    token);
+            }
+            else
+            {
+                log("[KatFile] No captcha detected, proceeding directly...");
+            }
 
             // ── Step 4: Submit download2 form, capture URL ────────────────────
             var downloadUrl = await SubmitAndCaptureDownloadUrlAsync(page, log, ct);
             log("[KatFile] Download URL obtained.");
             return (fileName, downloadUrl);
+        }
+        catch (Exception) when (true)
+        {
+            // 截圖方便除錯，存到 /data/katfile-debug.png
+            try { await page.ScreenshotAsync(new PageScreenshotOptions { Path = "/data/katfile-debug.png" }); }
+            catch { /* ignore screenshot errors */ }
+            throw;
         }
         finally
         {
