@@ -39,8 +39,13 @@ public class KatFileDownloadService
                 "WitAiApiKey is not configured. " +
                 "Set it in Settings (get a free key at wit.ai) to download KatFile files.");
 
+        // Pick first working proxy from Downloader (null = direct)
+        var proxyHost = downloader.Proxies.FirstOrDefault(p => p != null);
+        if (proxyHost != null)
+            log($"[KatFile] Using proxy: {proxyHost}");
+
         var (fileName, downloadUrl) = await GetDownloadUrlAsync(
-            url, settings.WitAiApiKey, log, ct);
+            url, settings.WitAiApiKey, proxyHost, log, ct);
 
         var dir = settings.EffectiveDownloadDirectory;
         Directory.CreateDirectory(dir);
@@ -56,10 +61,10 @@ public class KatFileDownloadService
     // ── Main HTTP flow (mirrors JDownloader's doFree) ─────────────────────────
 
     private static async Task<(string FileName, string DownloadUrl)> GetDownloadUrlAsync(
-        string pageUrl, string witAiApiKey, Action<string> log, CancellationToken ct)
+        string pageUrl, string witAiApiKey, string? proxyHost, Action<string> log, CancellationToken ct)
     {
         var cookies = new CookieContainer();
-        using var http = MakeHttpClient(cookies);
+        using var http = MakeHttpClient(cookies, proxyHost);
 
         // ── GET initial page ──────────────────────────────────────────────────
         log("[KatFile] Fetching page...");
@@ -84,36 +89,35 @@ public class KatFileDownloadService
             DumpHtml(html, "step1-page", log);
         }
 
+        // ── Cloudflare Turnstile → hand off entirely to Playwright ────────────
+        if (html.Contains("cf-turnstile", StringComparison.OrdinalIgnoreCase))
+        {
+            log("[KatFile] Cloudflare Turnstile detected — using Playwright for step 2...");
+            var dlUrl = await PlaywrightStep2Async(finalUrl, cookies, proxyHost, log, ct);
+            return (fileName, dlUrl);
+        }
+
         // ── Wait (estimated_time is tenths-of-seconds per JDownloader) ────────
         var waitTenths = ExtractWaitTime(html);
         if (waitTenths > 0)
         {
             var waitSecs = waitTenths / 10;
-            log($"[KatFile] Waiting {waitSecs}s (from estimated_time={waitTenths})...");
+            log($"[KatFile] Waiting {waitSecs}s...");
             await Task.Delay(waitSecs * 1000 + 1_000, ct);
         }
-        else
-        {
-            // Minimum safety wait so server doesn't reject too-fast requests
-            log("[KatFile] No estimated_time found, waiting 5s...");
-            await Task.Delay(5_000, ct);
-        }
 
-        // ── Solve captcha if present ──────────────────────────────────────────
+        // ── reCaptcha v2 (audio solve via wit.ai) ────────────────────────────
         string captchaToken = "";
-        if (html.Contains("g-recaptcha", StringComparison.OrdinalIgnoreCase))
+        if (html.Contains("g-recaptcha", StringComparison.OrdinalIgnoreCase) &&
+            !html.Contains("without reCAPTCHA", StringComparison.OrdinalIgnoreCase))
         {
             log("[KatFile] reCaptcha v2 detected, solving via audio (wit.ai)...");
             captchaToken = await SolveCaptchaWithPlaywrightAsync(
-                finalUrl, cookies, witAiApiKey, log, ct);
+                finalUrl, cookies, proxyHost, witAiApiKey, log, ct);
         }
         else if (html.Contains("h-captcha", StringComparison.OrdinalIgnoreCase))
         {
-            log("[KatFile] hCaptcha detected — not supported yet, attempting without token...");
-        }
-        else
-        {
-            log("[KatFile] No captcha detected on step 2 page.");
+            log("[KatFile] hCaptcha detected — not supported, attempting without token...");
         }
 
         // ── Submit download2 form ─────────────────────────────────────────────
@@ -130,39 +134,184 @@ public class KatFileDownloadService
         if (!string.IsNullOrEmpty(captchaToken))
             form2["g-recaptcha-response"] = captchaToken;
 
-        log($"[KatFile] Step 2 form fields: {string.Join(", ", form2.Keys)}");
         log("[KatFile] Submitting step 2 (download form)...");
         http.DefaultRequestHeaders.Remove("Referer");
         http.DefaultRequestHeaders.Add("Referer", finalUrl);
         var (html2, afterPostUrl) = await PostFormAsync(http, finalUrl, form2, ct);
         DumpHtml(html2, "step2-response", log);
 
-        // ── Extract final download URL ────────────────────────────────────────
-        log($"[KatFile] After step 2 URL: {afterPostUrl}");
-
-        // If the POST redirected directly to a CDN URL, use that
         if (IsDownloadUrl(afterPostUrl))
             return (fileName, afterPostUrl);
 
-        var dlUrl = ExtractDownloadUrl(html2);
-        if (!string.IsNullOrEmpty(dlUrl))
-            return (fileName, dlUrl);
+        var dl = ExtractDownloadUrl(html2);
+        if (!string.IsNullOrEmpty(dl))
+            return (fileName, dl);
 
-        // Try to find any absolute HTTPS URL that could be a download
-        var anyLink = Regex.Match(html2,
+        var ext = Regex.Match(html2,
             @"https?://[a-zA-Z0-9.\-]+/[^\s""'<>]{10,}\.(?:rar|zip|7z|tar|gz|mp4|mkv|avi|pdf|exe|iso)\b",
             RegexOptions.IgnoreCase);
-        if (anyLink.Success)
-            return (fileName, anyLink.Value);
+        if (ext.Success)
+            return (fileName, ext.Value);
 
         throw new Exception(
             "Could not obtain download URL from KatFile. " +
             "Check /tmp/katfile-step2-response.html for the server response.");
     }
 
+    // ── Playwright step 2: Turnstile solve + form submit ─────────────────────
+
+    private static async Task<string> PlaywrightStep2Async(
+        string step2Url, CookieContainer cookies, string? proxyHost,
+        Action<string> log, CancellationToken ct)
+    {
+        using var playwright = await Playwright.CreateAsync();
+
+        var launchOpts = new BrowserTypeLaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage" }
+        };
+        if (proxyHost != null)
+            launchOpts.Proxy = new Microsoft.Playwright.Proxy { Server = $"http://{proxyHost}" };
+
+        await using var browser = await playwright.Chromium.LaunchAsync(launchOpts);
+
+        var pwCookies = cookies.GetAllCookies()
+            .Cast<System.Net.Cookie>()
+            .Select(c => new Microsoft.Playwright.Cookie
+            {
+                Name   = c.Name,  Value  = c.Value,
+                Domain = c.Domain, Path   = c.Path, Secure = c.Secure,
+            }).ToList();
+
+        var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            UserAgent = UserAgent
+        });
+        if (pwCookies.Count > 0)
+            await context.AddCookiesAsync(pwCookies);
+
+        var page = await context.NewPageAsync();
+
+        // Intercept CDN redirect responses
+        string? interceptedUrl = null;
+        page.Response += (_, resp) =>
+        {
+            if (resp.Status is 200 or 206 && IsDownloadUrl(resp.Url))
+                interceptedUrl = resp.Url;
+        };
+
+        try
+        {
+            log("[KatFile] Opening page in browser...");
+            await page.GotoAsync(step2Url, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout   = 30_000
+            });
+
+            var html = await page.ContentAsync();
+
+            // If session expired and we landed on step 1, click Free Download
+            if (html.Contains("op=download1", StringComparison.OrdinalIgnoreCase) ||
+                html.Contains("method_free", StringComparison.OrdinalIgnoreCase) &&
+                html.Contains("download1", StringComparison.OrdinalIgnoreCase))
+            {
+                log("[KatFile] Step 1 form found, submitting...");
+                var btn = page.Locator("input[name='method_free']").First;
+                if (await btn.IsVisibleAsync())
+                    await btn.ClickAsync();
+                else
+                    await page.EvaluateAsync(
+                        "() => document.querySelector('form input[name=\"op\"][value=\"download1\"]')?.closest('form')?.submit()");
+                await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
+                html = await page.ContentAsync();
+            }
+
+            // Wait for Turnstile to auto-solve
+            if (html.Contains("cf-turnstile", StringComparison.OrdinalIgnoreCase))
+            {
+                log("[KatFile] Waiting for Cloudflare Turnstile to auto-solve...");
+                try
+                {
+                    await page.WaitForFunctionAsync(
+                        "() => { const el = document.querySelector('[name=\"cf-turnstile-response\"]'); return el && el.value && el.value.length > 0; }",
+                        null, new PageWaitForFunctionOptions { Timeout = 30_000 });
+                    log("[KatFile] Turnstile solved!");
+                }
+                catch (TimeoutException)
+                {
+                    DumpHtml(await page.ContentAsync(), "turnstile-timeout", log);
+                    throw new Exception(
+                        "Cloudflare Turnstile did not auto-solve within 30s. " +
+                        "Your IP may be flagged — run with a proxy (app auto-fetches proxies on startup).");
+                }
+            }
+
+            // Ensure device_id is set (mirrors page JS using localStorage)
+            await page.EvaluateAsync(@"() => {
+                if (!localStorage['katfileDeviceId'])
+                    localStorage['katfileDeviceId'] = crypto.randomUUID();
+                const el = document.getElementById('deviceId');
+                if (el) el.value = localStorage['katfileDeviceId'];
+            }");
+
+            log("[KatFile] Submitting download2 form...");
+            try
+            {
+                await page.RunAndWaitForNavigationAsync(
+                    async () => await page.EvaluateAsync(
+                        "() => { const f = document.getElementById('_mform') ?? document.querySelector('form[name=\"F1\"]'); if (f) f.submit(); }"),
+                    new PageRunAndWaitForNavigationOptions
+                    {
+                        WaitUntil = WaitUntilState.DOMContentLoaded,
+                        Timeout   = 30_000
+                    });
+            }
+            catch (TimeoutException)
+            {
+                log("[KatFile] No navigation after form submit, checking page...");
+            }
+
+            await page.WaitForLoadStateAsync(LoadState.NetworkIdle,
+                new PageWaitForLoadStateOptions { Timeout = 10_000 }).ConfigureAwait(false);
+
+            // 1. CDN URL captured by response interceptor
+            if (interceptedUrl != null)
+            {
+                log($"[KatFile] CDN URL from interceptor: {interceptedUrl}");
+                return interceptedUrl;
+            }
+
+            // 2. Current URL is already a CDN link
+            if (IsDownloadUrl(page.Url))
+                return page.Url;
+
+            // 3. Extract from page HTML
+            var finalHtml = await page.ContentAsync();
+            DumpHtml(finalHtml, "playwright-response", log);
+
+            var dlUrl = ExtractDownloadUrl(finalHtml);
+            if (!string.IsNullOrEmpty(dlUrl)) return dlUrl;
+
+            var ext = Regex.Match(finalHtml,
+                @"https?://[a-zA-Z0-9.\-]+/[^\s""'<>]{10,}\.(?:rar|zip|7z|tar|gz|mp4|mkv|avi|pdf|exe|iso)\b",
+                RegexOptions.IgnoreCase);
+            if (ext.Success) return ext.Value;
+
+            throw new Exception(
+                "Could not find download URL after Turnstile solve. " +
+                "Check /tmp/katfile-playwright-response.html");
+        }
+        finally
+        {
+            await context.CloseAsync();
+        }
+    }
+
     // ── HTTP helpers ──────────────────────────────────────────────────────────
 
-    private static HttpClient MakeHttpClient(CookieContainer cookies)
+    private static HttpClient MakeHttpClient(CookieContainer cookies, string? proxyHost = null)
     {
         var handler = new HttpClientHandler
         {
@@ -170,6 +319,11 @@ public class KatFileDownloadService
             UseCookies        = true,
             AllowAutoRedirect = false,   // we handle redirects manually
         };
+        if (proxyHost != null)
+        {
+            handler.Proxy    = new WebProxy($"http://{proxyHost}");
+            handler.UseProxy = true;
+        }
         var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
         client.DefaultRequestHeaders.Add("User-Agent", UserAgent);
         client.DefaultRequestHeaders.Add("Accept",
@@ -389,15 +543,18 @@ public class KatFileDownloadService
     // ── reCaptcha solving via Playwright (audio + wit.ai) ─────────────────────
 
     private static async Task<string> SolveCaptchaWithPlaywrightAsync(
-        string pageUrl, CookieContainer cookies, string witAiApiKey,
+        string pageUrl, CookieContainer cookies, string? proxyHost, string witAiApiKey,
         Action<string> log, CancellationToken ct)
     {
         using var playwright = await Playwright.CreateAsync();
-        await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        var launchOpts = new BrowserTypeLaunchOptions
         {
             Headless = true,
             Args = new[] { "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage" }
-        });
+        };
+        if (proxyHost != null)
+            launchOpts.Proxy = new Microsoft.Playwright.Proxy { Server = $"http://{proxyHost}" };
+        await using var browser = await playwright.Chromium.LaunchAsync(launchOpts);
 
         // Copy cookies from HTTP session into Playwright context
         var pwCookies = cookies.GetAllCookies()
