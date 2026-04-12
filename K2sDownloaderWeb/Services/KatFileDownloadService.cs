@@ -210,12 +210,13 @@ public class KatFileDownloadService
                 Timeout   = 30_000
             });
 
+            // Dismiss Register / promo popup if present
+            await DismissPopupAsync(page, ct);
+
             var html = await page.ContentAsync();
 
-            // If we landed on step 1 (GET always shows step 1), submit it
-            if (html.Contains("op=download1", StringComparison.OrdinalIgnoreCase) ||
-                (html.Contains("method_free", StringComparison.OrdinalIgnoreCase) &&
-                 html.Contains("download1", StringComparison.OrdinalIgnoreCase)))
+            // GET always shows step 1; detect by presence of method_free submit button
+            if (IsStep1Page(html))
             {
                 log("[KatFile] Step 1 form found, submitting...");
                 try
@@ -223,7 +224,7 @@ public class KatFileDownloadService
                     await page.RunAndWaitForNavigationAsync(
                         async () =>
                         {
-                            var btn = page.Locator("input[name='method_free']").First;
+                            var btn = page.Locator("input[name='method_free'][type='submit'], input[name='method_free']:not([type='hidden'])").First;
                             if (await btn.IsVisibleAsync())
                                 await btn.ClickAsync();
                             else
@@ -232,38 +233,48 @@ public class KatFileDownloadService
                         },
                         new PageRunAndWaitForNavigationOptions
                         {
-                            WaitUntil = WaitUntilState.DOMContentLoaded,
-                            Timeout   = 20_000
+                            WaitUntil = WaitUntilState.NetworkIdle,
+                            Timeout   = 25_000
                         });
                 }
                 catch (TimeoutException)
                 {
                     log("[KatFile] Step 1 navigation timed out, continuing anyway...");
                 }
+
+                // Dismiss popup on step 2 as well
+                await DismissPopupAsync(page, ct);
                 html = await page.ContentAsync();
+                DumpHtml(html, "playwright-after-step1", log);
             }
 
-            // Wait for Turnstile to auto-solve
-            if (html.Contains("cf-turnstile", StringComparison.OrdinalIgnoreCase))
+            // Wait for Turnstile iframe to be injected by JS, then wait for auto-solve
+            try
             {
+                log("[KatFile] Waiting for Turnstile widget (JS inject)...");
+                await page.WaitForSelectorAsync(
+                    "iframe[src*='turnstile'], div[data-sitekey]",
+                    new PageWaitForSelectorOptions { Timeout = 15_000 });
+
                 log("[KatFile] Waiting for Cloudflare Turnstile to auto-solve...");
-                try
-                {
-                    await page.WaitForFunctionAsync(
-                        "() => { const el = document.querySelector('[name=\"cf-turnstile-response\"]'); return el && el.value && el.value.length > 0; }",
-                        null, new PageWaitForFunctionOptions { Timeout = 30_000 });
-                    log("[KatFile] Turnstile solved!");
-                }
-                catch (TimeoutException)
-                {
-                    DumpHtml(await page.ContentAsync(), "turnstile-timeout", log);
+                await page.WaitForFunctionAsync(
+                    "() => { const el = document.querySelector('[name=\"cf-turnstile-response\"]'); return el && el.value && el.value.length > 0; }",
+                    null, new PageWaitForFunctionOptions { Timeout = 30_000 });
+                log("[KatFile] Turnstile solved!");
+            }
+            catch (TimeoutException ex)
+            {
+                DumpHtml(await page.ContentAsync(), "turnstile-timeout", log);
+                // If no widget at all, maybe captcha isn't required — log and continue
+                if (ex.Message.Contains("Waiting for selector"))
+                    log("[KatFile] No Turnstile widget found, submitting without token...");
+                else
                     throw new Exception(
                         "Cloudflare Turnstile did not auto-solve within 30s. " +
-                        "Your IP may be flagged — run with a proxy (app auto-fetches proxies on startup).");
-                }
+                        "Your IP may be flagged — proxies are fetched automatically on startup.");
             }
 
-            // Ensure device_id is set (mirrors page JS using localStorage)
+            // Set device_id via localStorage (mirrors page JS)
             await page.EvaluateAsync(@"() => {
                 if (!localStorage['katfileDeviceId'])
                     localStorage['katfileDeviceId'] = crypto.randomUUID();
@@ -769,6 +780,47 @@ public class KatFileDownloadService
 
     private static string HtmlDecode(string s) =>
         System.Net.WebUtility.HtmlDecode(s);
+
+    /// <summary>True when the page is the step-1 download form (method_free is a submit button).</summary>
+    private static bool IsStep1Page(string html) =>
+        Regex.IsMatch(html,
+            @"<input[^>]*name=[""']method_free[""'][^>]*type=[""']submit[""']|" +
+            @"<input[^>]*type=[""']submit[""'][^>]*name=[""']method_free[""']",
+            RegexOptions.IgnoreCase);
+
+    /// <summary>Tries to close any visible modal/popup (Register, promo, etc.).</summary>
+    private static async Task DismissPopupAsync(IPage page, CancellationToken ct)
+    {
+        try
+        {
+            // Escape key closes most Bootstrap modals
+            await page.Keyboard.PressAsync("Escape");
+            await Task.Delay(400, ct);
+
+            // Try explicit close / dismiss buttons
+            foreach (var sel in new[]
+            {
+                ".modal .close",
+                ".modal [data-dismiss='modal']",
+                ".modal-footer .btn-default",
+                ".modal-footer button:not(.btn-primary)",
+            })
+            {
+                try
+                {
+                    var el = page.Locator(sel).First;
+                    if (await el.IsVisibleAsync(new LocatorIsVisibleOptions { Timeout = 600 }))
+                    {
+                        await el.ClickAsync(new LocatorClickOptions { Timeout = 2_000 });
+                        await Task.Delay(300, ct);
+                        break;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
 
     private static string Sanitize(string name) =>
         Regex.Replace(name, @"[\\/:*?""<>|]", "_").Trim();
