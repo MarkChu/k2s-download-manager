@@ -74,6 +74,8 @@ public class KatFileDownloadService
 
             var fileName = await ExtractFileNameAsync(page);
             log($"[KatFile] File: {fileName}");
+            await DebugScreenshotAsync(page, "01-landed");
+            await DebugDumpFormsAsync(page, log);
 
             // ── Step 1: Submit download1 form ("Free Download") ───────────────
             var freeBtn = page.Locator("input[name='method_free']").First;
@@ -95,10 +97,13 @@ public class KatFileDownloadService
                 await freeBtn.ClickAsync();
                 await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded,
                     new PageWaitForLoadStateOptions { Timeout = 20_000 });
+                await DebugScreenshotAsync(page, "02-after-step1");
+                await DebugDumpFormsAsync(page, log);
             }
 
             // ── Step 2: Wait for countdown timer ──────────────────────────────
             await WaitForCountdownAsync(page, log, ct);
+            await DebugScreenshotAsync(page, "03-after-countdown");
 
             // ── Step 3: Solve reCaptcha (optional — not all pages require it) ──
             bool hasCaptcha;
@@ -124,10 +129,13 @@ public class KatFileDownloadService
                     "  if (el) { el.value = t; el.dispatchEvent(new Event('change')); } " +
                     "}",
                     token);
+                await DebugScreenshotAsync(page, "04-after-captcha");
             }
             else
             {
                 log("[KatFile] No captcha detected, proceeding directly...");
+                await DebugScreenshotAsync(page, "04-no-captcha");
+                await DebugDumpFormsAsync(page, log);
             }
 
             // ── Step 4: Submit download2 form, capture URL ────────────────────
@@ -137,9 +145,8 @@ public class KatFileDownloadService
         }
         catch (Exception) when (true)
         {
-            // 截圖方便除錯，存到 /data/katfile-debug.png
-            try { await page.ScreenshotAsync(new PageScreenshotOptions { Path = "/data/katfile-debug.png" }); }
-            catch { /* ignore screenshot errors */ }
+            try { await DebugScreenshotAsync(page, "error"); }
+            catch { /* ignore */ }
             throw;
         }
         finally
@@ -395,6 +402,40 @@ public class KatFileDownloadService
                 "() => document.querySelector('[name=\"g-recaptcha-response\"]')?.value ?? ''");
         }
         catch { return null; }
+    }
+
+    // ── Debug helpers ─────────────────────────────────────────────────────────
+
+    private static readonly string _debugDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "katfile-debug");
+
+    private static async Task DebugScreenshotAsync(IPage page, string step)
+    {
+        try
+        {
+            Directory.CreateDirectory(_debugDir);
+            var path = Path.Combine(_debugDir, $"{step}.png");
+            await page.ScreenshotAsync(new PageScreenshotOptions { Path = path, FullPage = true });
+        }
+        catch { /* ignore */ }
+    }
+
+    private static async Task DebugDumpFormsAsync(IPage page, Action<string> log)
+    {
+        try
+        {
+            var info = await page.EvaluateAsync<string>(@"() => {
+                const inputs = [...document.querySelectorAll('input[type=submit], button[type=submit]')];
+                return inputs.map(el =>
+                    `[${el.type}] name=${el.name} value=${el.value} visible=${el.offsetParent !== null}`
+                ).join(' | ');
+            }");
+            log($"[Debug] Submit buttons: {info}");
+
+            var url = page.Url;
+            log($"[Debug] Current URL: {url}");
+        }
+        catch { /* ignore */ }
     }
 
     private static async Task<string> TranscribeWithWitAiAsync(
