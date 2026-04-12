@@ -15,7 +15,7 @@ public class KatFileDownloadService
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     private static readonly Regex _urlPattern =
-        new(@"https?://(?:www\.)?katfile\.com/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"https?://(?:www\.)?katfile\.(com|vip)/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public KatFileDownloadService(IHubContext<DownloadHub> hub)
     {

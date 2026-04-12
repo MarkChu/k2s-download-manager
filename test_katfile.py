@@ -30,7 +30,7 @@ import io
 # ── 1. URL pattern test (mirrors KatFileDownloadService._urlPattern) ───────────
 
 URL_PATTERN = re.compile(
-    r'https?://(?:www\.)?katfile\.com/\w',
+    r'https?://(?:www\.)?katfile\.(com|vip)/\w',
     re.IGNORECASE
 )
 
@@ -39,13 +39,15 @@ def is_katfile_url(url: str) -> bool:
 
 def test_url_pattern():
     cases = [
-        ("https://katfile.com/abc123/file.zip",     True),
-        ("https://www.katfile.com/XyZ/doc.pdf",     True),
-        ("http://katfile.com/abc/test.mp4",          True),
-        ("https://k2s.cc/file/abc",                  False),
-        ("https://keep2share.cc/file/abc",           False),
-        ("https://katfile.com/",                     False),  # no file id char
-        ("https://katfile.com",                      False),
+        ("https://katfile.com/abc123/file.zip",            True),
+        ("https://www.katfile.com/XyZ/doc.pdf",            True),
+        ("http://katfile.com/abc/test.mp4",                True),
+        ("https://katfile.vip/9b6eythdkdll/g8843.part1.rar.html", True),
+        ("https://www.katfile.vip/abc/file.zip",           True),
+        ("https://k2s.cc/file/abc",                        False),
+        ("https://keep2share.cc/file/abc",                 False),
+        ("https://katfile.com/",                           False),
+        ("https://katfile.com",                            False),
     ]
     passed = all_ok = True
     for url, expected in cases:
