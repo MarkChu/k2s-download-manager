@@ -212,19 +212,34 @@ public class KatFileDownloadService
 
             var html = await page.ContentAsync();
 
-            // If session expired and we landed on step 1, click Free Download
+            // If we landed on step 1 (GET always shows step 1), submit it
             if (html.Contains("op=download1", StringComparison.OrdinalIgnoreCase) ||
-                html.Contains("method_free", StringComparison.OrdinalIgnoreCase) &&
-                html.Contains("download1", StringComparison.OrdinalIgnoreCase))
+                (html.Contains("method_free", StringComparison.OrdinalIgnoreCase) &&
+                 html.Contains("download1", StringComparison.OrdinalIgnoreCase)))
             {
                 log("[KatFile] Step 1 form found, submitting...");
-                var btn = page.Locator("input[name='method_free']").First;
-                if (await btn.IsVisibleAsync())
-                    await btn.ClickAsync();
-                else
-                    await page.EvaluateAsync(
-                        "() => document.querySelector('form input[name=\"op\"][value=\"download1\"]')?.closest('form')?.submit()");
-                await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
+                try
+                {
+                    await page.RunAndWaitForNavigationAsync(
+                        async () =>
+                        {
+                            var btn = page.Locator("input[name='method_free']").First;
+                            if (await btn.IsVisibleAsync())
+                                await btn.ClickAsync();
+                            else
+                                await page.EvaluateAsync(
+                                    "() => { const f = document.querySelector('form input[name=\"op\"][value=\"download1\"]')?.closest('form'); if (f) f.submit(); }");
+                        },
+                        new PageRunAndWaitForNavigationOptions
+                        {
+                            WaitUntil = WaitUntilState.DOMContentLoaded,
+                            Timeout   = 20_000
+                        });
+                }
+                catch (TimeoutException)
+                {
+                    log("[KatFile] Step 1 navigation timed out, continuing anyway...");
+                }
                 html = await page.ContentAsync();
             }
 
