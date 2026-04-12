@@ -137,26 +137,48 @@ public class KatFileDownloadService
     {
         var handler = new HttpClientHandler
         {
-            CookieContainer  = cookies,
-            UseCookies       = true,
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10,
+            CookieContainer   = cookies,
+            UseCookies        = true,
+            AllowAutoRedirect = false,   // we handle redirects manually
         };
         var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
         client.DefaultRequestHeaders.Add("User-Agent", UserAgent);
         client.DefaultRequestHeaders.Add("Accept",
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.5");
+        client.DefaultRequestHeaders.Add("Upgrade-Insecure-Requests", "1");
         return client;
     }
 
     private static async Task<(string Html, string FinalUrl)> GetPageAsync(
         HttpClient http, string url, CancellationToken ct)
     {
-        using var resp = await http.GetAsync(url, ct);
-        var html = await resp.Content.ReadAsStringAsync(ct);
-        var final = resp.RequestMessage?.RequestUri?.ToString() ?? url;
-        return (html, final);
+        for (int hop = 0; hop < 12; hop++)
+        {
+            using var resp = await http.GetAsync(url, ct);
+            var html = await resp.Content.ReadAsStringAsync(ct);
+
+            // Follow HTTP 3xx redirects
+            if ((int)resp.StatusCode is >= 300 and < 400)
+            {
+                var loc = resp.Headers.Location;
+                url = loc is not null ? ResolveUrl(url, loc.ToString()) : url;
+                continue;
+            }
+
+            // Follow <meta http-equiv="refresh" ...> redirects
+            var metaM = Regex.Match(html,
+                @"<meta[^>]+http-equiv=[""']refresh[""'][^>]+content=[""'][^;]*;\s*url=([^""'\s>]+)",
+                RegexOptions.IgnoreCase);
+            if (metaM.Success)
+            {
+                url = ResolveUrl(url, metaM.Groups[1].Value.Trim('\'', '"'));
+                continue;
+            }
+
+            return (html, url);
+        }
+        throw new Exception("Too many redirects fetching KatFile page.");
     }
 
     private static async Task<(string Html, string FinalUrl)> PostFormAsync(
@@ -173,9 +195,17 @@ public class KatFileDownloadService
 
         using var content = new FormUrlEncodedContent(postFields);
         using var resp = await http.PostAsync(action, content, ct);
+
+        // Follow redirects (POST → GET for 301/302/303, standard browser behaviour)
+        if ((int)resp.StatusCode is >= 300 and < 400)
+        {
+            var loc = resp.Headers.Location;
+            var redirectUrl = loc is not null ? ResolveUrl(action, loc.ToString()) : action;
+            return await GetPageAsync(http, redirectUrl, ct);
+        }
+
         var html = await resp.Content.ReadAsStringAsync(ct);
-        var final = resp.RequestMessage?.RequestUri?.ToString() ?? action;
-        return (html, final);
+        return (html, action);
     }
 
     // ── HTML form parser ──────────────────────────────────────────────────────
