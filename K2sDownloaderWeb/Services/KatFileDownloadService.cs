@@ -310,11 +310,11 @@ public class KatFileDownloadService
         };
 
         log("[KatFile] Submitting download form...");
+        // Explicitly target the free download button; exclude method_premium which is hidden
         var submitBtn = page.Locator(
             "input[name='method_free'][type='submit'], " +
             "#btn_download, " +
-            "input[value*='Download'][type='submit'], " +
-            "form[method='post'] input[type='submit']"
+            "input[type='submit']:not([name='method_premium'])"
         ).Last;
 
         await submitBtn.ClickAsync(new LocatorClickOptions { Timeout = 8_000 });
