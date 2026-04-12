@@ -77,6 +77,11 @@ public class KatFileDownloadService
             http.DefaultRequestHeaders.Remove("Referer");
             http.DefaultRequestHeaders.Add("Referer", finalUrl);
             (html, finalUrl) = await PostFormAsync(http, finalUrl, form1, ct);
+            DumpHtml(html, "step2-page", log);
+        }
+        else
+        {
+            DumpHtml(html, "step1-page", log);
         }
 
         // ── Wait (estimated_time is tenths-of-seconds per JDownloader) ────────
@@ -84,8 +89,14 @@ public class KatFileDownloadService
         if (waitTenths > 0)
         {
             var waitSecs = waitTenths / 10;
-            log($"[KatFile] Waiting {waitSecs}s...");
+            log($"[KatFile] Waiting {waitSecs}s (from estimated_time={waitTenths})...");
             await Task.Delay(waitSecs * 1000 + 1_000, ct);
+        }
+        else
+        {
+            // Minimum safety wait so server doesn't reject too-fast requests
+            log("[KatFile] No estimated_time found, waiting 5s...");
+            await Task.Delay(5_000, ct);
         }
 
         // ── Solve captcha if present ──────────────────────────────────────────
@@ -100,6 +111,10 @@ public class KatFileDownloadService
         {
             log("[KatFile] hCaptcha detected — not supported yet, attempting without token...");
         }
+        else
+        {
+            log("[KatFile] No captcha detected on step 2 page.");
+        }
 
         // ── Submit download2 form ─────────────────────────────────────────────
         var form2 = FindForm(html, "download2")
@@ -107,17 +122,24 @@ public class KatFileDownloadService
                  ?? FindFormByName(html, "F1");
 
         if (form2 is null)
+        {
+            DumpHtml(html, "step2-no-form", log);
             throw new Exception("Could not find download2 form in page.");
+        }
 
         if (!string.IsNullOrEmpty(captchaToken))
             form2["g-recaptcha-response"] = captchaToken;
 
+        log($"[KatFile] Step 2 form fields: {string.Join(", ", form2.Keys)}");
         log("[KatFile] Submitting step 2 (download form)...");
         http.DefaultRequestHeaders.Remove("Referer");
         http.DefaultRequestHeaders.Add("Referer", finalUrl);
         var (html2, afterPostUrl) = await PostFormAsync(http, finalUrl, form2, ct);
+        DumpHtml(html2, "step2-response", log);
 
         // ── Extract final download URL ────────────────────────────────────────
+        log($"[KatFile] After step 2 URL: {afterPostUrl}");
+
         // If the POST redirected directly to a CDN URL, use that
         if (IsDownloadUrl(afterPostUrl))
             return (fileName, afterPostUrl);
@@ -126,9 +148,16 @@ public class KatFileDownloadService
         if (!string.IsNullOrEmpty(dlUrl))
             return (fileName, dlUrl);
 
+        // Try to find any absolute HTTPS URL that could be a download
+        var anyLink = Regex.Match(html2,
+            @"https?://[a-zA-Z0-9.\-]+/[^\s""'<>]{10,}\.(?:rar|zip|7z|tar|gz|mp4|mkv|avi|pdf|exe|iso)\b",
+            RegexOptions.IgnoreCase);
+        if (anyLink.Success)
+            return (fileName, anyLink.Value);
+
         throw new Exception(
             "Could not obtain download URL from KatFile. " +
-            "The page structure may have changed.");
+            "Check /tmp/katfile-step2-response.html for the server response.");
     }
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
@@ -571,4 +600,16 @@ public class KatFileDownloadService
 
     private static string Sanitize(string name) =>
         Regex.Replace(name, @"[\\/:*?""<>|]", "_").Trim();
+
+    /// <summary>Saves HTML to /tmp/katfile-{label}.html for debugging.</summary>
+    private static void DumpHtml(string html, string label, Action<string> log)
+    {
+        try
+        {
+            var path = $"/tmp/katfile-{label}.html";
+            File.WriteAllText(path, html);
+            log($"[KatFile] [debug] HTML saved → {path} ({html.Length} chars)");
+        }
+        catch { }
+    }
 }
