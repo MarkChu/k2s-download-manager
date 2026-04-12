@@ -116,8 +116,10 @@ public class DownloadOrchestrator : BackgroundService
             if (KatFileDownloadService.IsKatFileUrl(item.Url))
             {
                 // ── KatFile: Playwright + audio reCaptcha + wit.ai ────────────
-                var katService = new KatFileDownloadService(_hub);
-                outFile = await katService.DownloadAsync(item, downloader, settings, ct);
+                void KatLog(string msg) =>
+                    _ = _hub.Clients.All.SendAsync("Log", item.Id, msg, CancellationToken.None);
+                outFile = await KatFileDownloadService.DownloadAsync(
+                    item.Url, item.Filename, downloader, settings, KatLog, ct);
             }
             else
             {

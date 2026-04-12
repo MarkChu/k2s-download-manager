@@ -1,26 +1,17 @@
 using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using K2sDownloaderWeb.Hubs;
-using K2sDownloaderWeb.Models;
 using K2sDownloaderWinForms.Core;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Playwright;
 
 namespace K2sDownloaderWeb.Services;
 
 public class KatFileDownloadService
 {
-    private readonly IHubContext<DownloadHub> _hub;
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     private static readonly Regex _urlPattern =
         new(@"https?://(?:www\.)?katfile\.(com|vip)/\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    public KatFileDownloadService(IHubContext<DownloadHub> hub)
-    {
-        _hub = hub;
-    }
 
     public static bool IsKatFileUrl(string url) => _urlPattern.IsMatch(url);
 
@@ -31,23 +22,21 @@ public class KatFileDownloadService
     /// the reCaptcha v2 audio challenge via wit.ai, then downloads the file
     /// using the existing chunked HTTP engine.  Returns the local output path.
     /// </summary>
-    public async Task<string> DownloadAsync(
-        QueueItem item, Downloader downloader, AppSettings settings, CancellationToken ct)
+    public static async Task<string> DownloadAsync(
+        string url, string? preferredFilename, Downloader downloader,
+        AppSettings settings, Action<string> log, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(settings.WitAiApiKey))
             throw new PermanentException(
                 "WitAiApiKey is not configured. " +
                 "Set it in Settings (get a free key at wit.ai) to download KatFile files.");
 
-        void Log(string msg) =>
-            _ = _hub.Clients.All.SendAsync("Log", item.Id, msg, CancellationToken.None);
-
         var (fileName, downloadUrl) = await GetDownloadUrlAsync(
-            item.Url, settings.WitAiApiKey, Log, ct);
+            url, settings.WitAiApiKey, log, ct);
 
         var dir = settings.EffectiveDownloadDirectory;
         Directory.CreateDirectory(dir);
-        var baseName = string.IsNullOrWhiteSpace(item.Filename) ? fileName : item.Filename;
+        var baseName = string.IsNullOrWhiteSpace(preferredFilename) ? fileName : preferredFilename;
         var outputPath = Path.Combine(dir, Path.GetFileName(baseName));
 
         await downloader.DownloadFromDirectUrlAsync(

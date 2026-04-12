@@ -16,6 +16,12 @@
     <Compile Include="../K2sDownloaderWinForms/Core/K2sClient.cs"         Link="Core/K2sClient.cs" />
     <Compile Include="../K2sDownloaderWinForms/Core/ProxyManager.cs"      Link="Core/ProxyManager.cs" />
     <Compile Include="../K2sDownloaderWinForms/Core/ProxyRefreshService.cs" Link="Core/ProxyRefreshService.cs" />
+    <!-- KatFile download service (shared with Web project) -->
+    <Compile Include="../K2sDownloaderWeb/Services/KatFileDownloadService.cs" Link="Services/KatFileDownloadService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.51.0" />
   </ItemGroup>
 
   <ItemGroup>

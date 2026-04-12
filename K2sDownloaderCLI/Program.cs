@@ -1,4 +1,5 @@
 using System.Text;
+using K2sDownloaderWeb.Services;
 using K2sDownloaderWinForms.Core;
 
 namespace K2sDownloaderCLI;
@@ -14,6 +15,7 @@ static class Program
         string? filename  = null;
         string? outputDir = null;
         string? geminiKey = null;
+        string? witKey    = null;
         int?    threads   = null;
         int?    splitMb   = null;
         int?    retries   = null;
@@ -29,6 +31,7 @@ static class Program
                 case "-f": case "--filename":   filename  = Next(args, ref i); break;
                 case "-o": case "--output-dir": outputDir = Next(args, ref i); break;
                 case "-g": case "--gemini-key": geminiKey = Next(args, ref i); break;
+                case "-w": case "--wit-key":    witKey    = Next(args, ref i); break;
                 case "-t": case "--threads":
                     if (int.TryParse(Next(args, ref i), out var t)) threads = t; break;
                 case "-s": case "--split-mb":
@@ -52,6 +55,8 @@ static class Program
         var settings = AppSettings.Load();
         if (!string.IsNullOrWhiteSpace(geminiKey))
             settings.GeminiApiKey = geminiKey;
+        if (!string.IsNullOrWhiteSpace(witKey))
+            settings.WitAiApiKey = witKey;
         if (!string.IsNullOrWhiteSpace(outputDir))
             settings.DownloadDirectory = outputDir;
 
@@ -124,14 +129,35 @@ static class Program
             return Console.ReadLine()?.Trim() ?? string.Empty;
         };
 
-        // ── Download (outer retry loop) ───────────────────────────────────────
-        // Inner retries (GetFileName, URL gen, core chunks) are handled inside
-        // Downloader.DownloadAsync. This outer loop covers whole-session failures
-        // (e.g. unrecoverable proxy exhaustion, captcha service down) so the CLI
-        // can recover without human intervention.
+        // ── Download ──────────────────────────────────────────────────────────
         int maxRetries = retries ?? settings.DownloadMaxRetries;
         try
         {
+            // ── KatFile: Playwright + audio reCaptcha + wit.ai ────────────────
+            if (KatFileDownloadService.IsKatFileUrl(url))
+            {
+                Log($"[KatFile] Starting: {url}");
+                try
+                {
+                    var outFile = await KatFileDownloadService.DownloadAsync(
+                        url, filename, downloader, settings, Log, cts.Token);
+                    ResetProgress();
+                    Log($"Done! Saved to: {outFile}");
+                    return 0;
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (DownloadCancelledException) { throw; }
+                catch (Exception ex)
+                {
+                    ResetProgress();
+                    Log($"Error: {ex.Message}");
+                    return 1;
+                }
+            }
+
+            // ── K2S: existing API + Gemini / manual captcha ───────────────────
+            // Inner retries (GetFileName, URL gen, core chunks) are handled inside
+            // Downloader.DownloadAsync. This outer loop covers whole-session failures.
             for (int attempt = 1; ; attempt++)
             {
                 try
@@ -332,25 +358,32 @@ static class Program
         ++i < args.Length ? args[i] : null;
 
     private static void PrintHelp() => Console.WriteLine("""
-        K2S Downloader CLI  (cross-platform, runs on Windows / Linux / macOS)
+        K2S / KatFile Downloader CLI  (cross-platform, runs on Windows / Linux / macOS)
 
         Usage:
           k2s-cli <url> [options]
 
         Options:
-          -f, --filename   <name>   Output filename  (default: original name from K2S)
+          -f, --filename   <name>   Output filename  (default: original name)
           -o, --output-dir <dir>    Output directory (default: current dir or settings.json)
           -t, --threads    <n>      Worker thread count           (default: 20)
           -s, --split-mb   <mb>     Split chunk size MB           (default: 20)
           -r, --retries    <n>      Max outer session retries     (default: 3)
-          -g, --gemini-key <key>    Gemini API key for automatic captcha solving
+          -g, --gemini-key <key>    Gemini API key (K2S captcha auto-solve)
+          -w, --wit-key    <key>    wit.ai Server Token (KatFile audio captcha)
               --no-proxy            Skip proxy fetch / auto-refresh
           -h, --help                Show this help
+
+        KatFile example:
+          k2s-cli https://katfile.vip/abc123/file.rar -w YOUR_WIT_AI_KEY -o ~/Downloads
 
         Settings are also read from settings.json next to the executable.
         Press Ctrl+C to cancel an in-progress download.
 
         Build for Linux:
           dotnet publish K2sDownloaderCLI -r linux-x64 -c Release --self-contained
+
+        After build, install Playwright browser:
+          ~/.dotnet/tools/playwright install chromium
         """);
 }
