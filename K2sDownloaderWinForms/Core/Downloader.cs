@@ -73,6 +73,21 @@ public class Downloader
     // ── Public API ────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Downloads a file from a single direct URL without K2S API or proxy rotation.
+    /// Uses the same chunked HTTP engine as <see cref="DownloadAsync"/> (resume-capable).
+    /// </summary>
+    public async Task<string> DownloadFromDirectUrlAsync(
+        string downloadUrl, string outputPath, int splitSizeBytes, CancellationToken ct)
+    {
+        if (splitSizeBytes < 5 * 1024 * 1024)
+            splitSizeBytes = 5 * 1024 * 1024;
+
+        var urlTuples = new List<(string Url, string? Proxy)> { (downloadUrl, null) };
+        await DownloadCoreAsync(urlTuples, outputPath, threads: 1, splitSizeBytes, ct);
+        return outputPath;
+    }
+
+    /// <summary>
     /// Seeds the proxy list before the first <see cref="DownloadAsync"/> call so the
     /// downloader skips its own fetch. Call this immediately after construction.
     /// </summary>

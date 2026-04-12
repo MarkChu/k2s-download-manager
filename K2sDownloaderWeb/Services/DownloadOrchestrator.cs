@@ -109,51 +109,63 @@ public class DownloadOrchestrator : BackgroundService
         _queue.UpdateStatus(item.Id, QueueStatus.Downloading);
         await _hub.Clients.All.SendAsync("ItemStatusChanged", item.Id, "Downloading", (string?)null, (string?)null, CancellationToken.None);
 
-        CaptchaCallback captchaCallback = async (imageBytes, challenge, captchaUrl) =>
-        {
-            // 1. Try Gemini auto-solve
-            if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey))
-            {
-                for (int attempt = 1; attempt <= settings.AutoSolveAttempts; attempt++)
-                {
-                    if (ct.IsCancellationRequested) break;
-                    try
-                    {
-                        var result = await GeminiClient.SolveCaptchaAsync(imageBytes, settings.GeminiApiKey, ct);
-                        if (!string.IsNullOrWhiteSpace(result))
-                        {
-                            await _hub.Clients.All.SendAsync("Log", item.Id, $"[Gemini] Auto-solved captcha (attempt {attempt})", CancellationToken.None);
-                            return result;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        await _hub.Clients.All.SendAsync("Log", item.Id, $"[Gemini] Attempt {attempt} failed: {ex.Message}", CancellationToken.None);
-                    }
-                    if (attempt < settings.AutoSolveAttempts)
-                        await Task.Delay(settings.AutoSolveBaseDelayMs, ct);
-                }
-            }
-
-            // 2. Fall back to manual solve via web UI
-            var captchaId    = Guid.NewGuid().ToString("N");
-            var tcs          = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            lock (_captchaLock) _pendingCaptchas[captchaId] = tcs;
-
-            var imageBase64 = Convert.ToBase64String(imageBytes);
-            await _hub.Clients.All.SendAsync("CaptchaRequired", item.Id, captchaId, imageBase64, captchaUrl, CancellationToken.None);
-
-            using var reg = ct.Register(() => tcs.TrySetCanceled());
-            try   { return await tcs.Task; }
-            finally { lock (_captchaLock) _pendingCaptchas.Remove(captchaId); }
-        };
-
         try
         {
-            var outFile   = await downloader.DownloadAsync(
-                item.Url, item.Filename,
-                settings.Threads, settings.SplitSizeMb * 1024 * 1024,
-                settings.FfmpegCheck, captchaCallback, ct);
+            string outFile;
+
+            if (KatFileDownloadService.IsKatFileUrl(item.Url))
+            {
+                // ── KatFile: Playwright + audio reCaptcha + wit.ai ────────────
+                var katService = new KatFileDownloadService(_hub);
+                outFile = await katService.DownloadAsync(item, downloader, settings, ct);
+            }
+            else
+            {
+                // ── K2S: existing API + Gemini / manual captcha ───────────────
+                CaptchaCallback captchaCallback = async (imageBytes, challenge, captchaUrl) =>
+                {
+                    // 1. Try Gemini auto-solve
+                    if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey))
+                    {
+                        for (int attempt = 1; attempt <= settings.AutoSolveAttempts; attempt++)
+                        {
+                            if (ct.IsCancellationRequested) break;
+                            try
+                            {
+                                var result = await GeminiClient.SolveCaptchaAsync(imageBytes, settings.GeminiApiKey, ct);
+                                if (!string.IsNullOrWhiteSpace(result))
+                                {
+                                    await _hub.Clients.All.SendAsync("Log", item.Id, $"[Gemini] Auto-solved captcha (attempt {attempt})", CancellationToken.None);
+                                    return result;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                await _hub.Clients.All.SendAsync("Log", item.Id, $"[Gemini] Attempt {attempt} failed: {ex.Message}", CancellationToken.None);
+                            }
+                            if (attempt < settings.AutoSolveAttempts)
+                                await Task.Delay(settings.AutoSolveBaseDelayMs, ct);
+                        }
+                    }
+
+                    // 2. Fall back to manual solve via web UI
+                    var captchaId = Guid.NewGuid().ToString("N");
+                    var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    lock (_captchaLock) _pendingCaptchas[captchaId] = tcs;
+
+                    var imageBase64 = Convert.ToBase64String(imageBytes);
+                    await _hub.Clients.All.SendAsync("CaptchaRequired", item.Id, captchaId, imageBase64, captchaUrl, CancellationToken.None);
+
+                    using var reg = ct.Register(() => tcs.TrySetCanceled());
+                    try   { return await tcs.Task; }
+                    finally { lock (_captchaLock) _pendingCaptchas.Remove(captchaId); }
+                };
+
+                outFile = await downloader.DownloadAsync(
+                    item.Url, item.Filename,
+                    settings.Threads, settings.SplitSizeMb * 1024 * 1024,
+                    settings.FfmpegCheck, captchaCallback, ct);
+            }
 
             var shortName = Path.GetFileName(outFile);
             _queue.UpdateStatus(item.Id, QueueStatus.Done, outputFile: shortName);

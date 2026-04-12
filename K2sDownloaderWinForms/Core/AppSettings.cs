@@ -9,6 +9,10 @@ public class AppSettings
 
     public string GeminiApiKey { get; set; } = string.Empty;
 
+    // ── Wit.ai API Key (for reCaptcha audio solving on KatFile) ───────────────
+
+    public string WitAiApiKey { get; set; } = string.Empty;
+
     // ── Download settings ─────────────────────────────────────────────────────
 
     public int  Threads           { get; set; } = 20;

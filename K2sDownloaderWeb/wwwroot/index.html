@@ -442,8 +442,8 @@
       <div class="panel-header">系統設定</div>
       <div class="panel-body">
 
-        <!-- Gemini / Captcha -->
-        <div class="settings-group-label">Captcha / Gemini 自動解題</div>
+        <!-- Gemini / Captcha (K2S) -->
+        <div class="settings-group-label">Captcha — K2S (Gemini 自動解題)</div>
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">Gemini API Key</label>
@@ -457,6 +457,18 @@
           <div class="col-md-2">
             <label class="form-label">每次逾時 (秒)</label>
             <input type="number" id="s-autoTimeout" class="form-control form-control-sm" min="5">
+          </div>
+        </div>
+
+        <!-- wit.ai / reCaptcha (KatFile) -->
+        <div class="settings-group-label">Captcha — KatFile (wit.ai 音頻辨識)</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">wit.ai API Key
+              <span class="text-muted small">（免費，需於 <a href="https://wit.ai" target="_blank" class="text-muted">wit.ai</a> 建立 App 取得）</span>
+            </label>
+            <input type="password" id="s-witAiKey" class="form-control form-control-sm"
+                   placeholder="留空則 KatFile 下載無法自動解題" autocomplete="new-password">
           </div>
         </div>
 
@@ -850,6 +862,9 @@ async function settingsLoad() {
   const keyInput = document.getElementById('s-geminiKey');
   keyInput.value       = '';
   keyInput.placeholder = s.geminiApiKey ? '已設定（留空則不修改）' : '未設定';
+  const witInput = document.getElementById('s-witAiKey');
+  witInput.value       = '';
+  witInput.placeholder = s.witAiApiKey ? '已設定（留空則不修改）' : '未設定';
   document.getElementById('s-autoAttempts').value   = s.autoSolveAttempts  ?? 3;
   document.getElementById('s-autoTimeout').value    = s.autoSolvePerAttemptTimeoutSec ?? 60;
   document.getElementById('s-downloadDir').value    = s.downloadDirectory  ?? '';
@@ -865,6 +880,7 @@ async function settingsLoad() {
 async function settingsSave() {
   const body = {
     geminiApiKey:                  document.getElementById('s-geminiKey').value || null,
+    witAiApiKey:                   document.getElementById('s-witAiKey').value  || null,
     autoSolveAttempts:             parseInt(document.getElementById('s-autoAttempts').value),
     autoSolvePerAttemptTimeoutSec: parseInt(document.getElementById('s-autoTimeout').value),
     autoSolveBaseDelayMs:          null,

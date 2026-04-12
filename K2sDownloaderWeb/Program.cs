@@ -107,9 +107,10 @@ const string ApiKeyMask = "••••••••";
 app.MapGet("/api/settings", () =>
 {
     var s = AppSettings.Load();
-    var maskedKey = string.IsNullOrEmpty(s.GeminiApiKey) ? "" : ApiKeyMask;
+    var maskedGemini = string.IsNullOrEmpty(s.GeminiApiKey) ? "" : ApiKeyMask;
+    var maskedWitAi  = string.IsNullOrEmpty(s.WitAiApiKey)  ? "" : ApiKeyMask;
     return Results.Ok(new SettingsDto(
-        maskedKey, s.DownloadDirectory,
+        maskedGemini, maskedWitAi, s.DownloadDirectory,
         s.Threads, s.SplitSizeMb, s.FfmpegCheck,
         s.MaxProxies, s.RevalidateProxies,
         s.DownloadMaxRetries, s.ProxyRefreshIntervalMin,
@@ -120,9 +121,10 @@ app.MapGet("/api/settings", () =>
 app.MapPut("/api/settings", (SettingsDto dto) =>
 {
     var s = AppSettings.Load();
-    // Only update the key when the client explicitly changed it (not the masked placeholder)
     if (dto.GeminiApiKey != null && dto.GeminiApiKey != ApiKeyMask)
         s.GeminiApiKey = dto.GeminiApiKey;
+    if (dto.WitAiApiKey != null && dto.WitAiApiKey != ApiKeyMask)
+        s.WitAiApiKey = dto.WitAiApiKey;
     s.DownloadDirectory             = dto.DownloadDirectory ?? s.DownloadDirectory;
     s.Threads                       = dto.Threads ?? s.Threads;
     s.SplitSizeMb                   = dto.SplitSizeMb ?? s.SplitSizeMb;
@@ -161,6 +163,7 @@ record AddUrlRequest(string Url, string? Filename);
 
 record SettingsDto(
     string? GeminiApiKey,
+    string? WitAiApiKey,
     string? DownloadDirectory,
     int?    Threads,
     int?    SplitSizeMb,
