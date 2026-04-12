@@ -342,7 +342,7 @@ public class KatFileDownloadService
 
         // Copy cookies from HTTP session into Playwright context
         var pwCookies = cookies.GetAllCookies()
-            .Cast<Cookie>()
+            .Cast<System.Net.Cookie>()
             .Select(c => new Microsoft.Playwright.Cookie
             {
                 Name   = c.Name,
